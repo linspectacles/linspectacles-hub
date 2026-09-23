@@ -1,8 +1,8 @@
+# LinSpectacles
+
 <p align="center">
   <img src="assets/linspectacles-logo.png" alt="LinSpectacles penguin X-ray roundel" width="180">
 </p>
-
-# LinSpectacles
 
 **Linux Inspection Suite**
 
