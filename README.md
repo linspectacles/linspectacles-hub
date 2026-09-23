@@ -4,7 +4,7 @@
   <img src="assets/linspectacles-logo.png" alt="LinSpectacles penguin X-ray roundel" width="180">
 </p>
 
-**Linux Inspection Suite**
+**LinSpectacles — Linux Inspection Suite**
 
 **Expose. Explore. Explain.**
 
