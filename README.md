@@ -1,197 +1,378 @@
-# LinSpectacles — Linux Inspection Suite
+<p align="center">
+  <img src="assets/linspectacles-logo.png" alt="LinSpectacles penguin X-ray roundel" width="180">
+</p>
 
-<p align="center"><img src="assets/linspectacles-logo.png" alt="LinSpectacles penguin X-ray roundel" width="180"></p>
+# LinSpectacles
 
-**Version 0.0.3-r2** · Organisation ID: **linspectacles** · Publisher/editor: **brunonlinespace** · GPLv3-or-later
+**Linux Inspection Suite**
 
 **Expose. Explore. Explain.**
 
-Portable, dark-only, read-only Linux inspection utilities with removable standalone applets.
+LinSpectacles is a modular, portable Linux inspection host for focused, read-only inspection utilities. Standalone-capable **applets** inspect Linux subsystems; optional **Suite Modules** extend the host itself without becoming sidebar inspectors.
 
-### 0.0.3-r2
+Current release: **0.0.4-r1**
 
-- Corrects the Suite repository to **`https://github.com/linspectacles/linspectables-suite/`** while retaining the organisation URL **`https://github.com/linspectacles/`**.
-- Keeps author/editor/publisher metadata in the component descriptor but removes those fields from the visible About presentations.
-- Dashboard **Inspection Coverage** columns now stretch to occupy the available table width.
-- No applet, module, navigation, inspection, or other Dashboard behaviour is changed.
+Repository: <https://github.com/linspectacles/linspectacles-suite>
 
-### 0.0.3-r1
+## What LinSpectacles is
 
-- Refreshes the displayed product-brand capitalization to **LinSpectacles** throughout the host and current documentation while retaining the internal `linspectacles` organization/package identity.
-- Adds **About** as the final **Configuration** tab, using the same About-page layout convention as the current Scheduler and Interrupts inspectors.
-- Confirms metadata: author/editor/publisher **brunonlinespace**, organisation ID **`linspectacles`**, and organisation URL **`https://github.com/linspectacles/`**.
-- No inspection, applet, module, navigation, or Dashboard behaviour is otherwise changed.
+LinSpectacles keeps the Suite shell separate from the inspectors it hosts.
 
-### 0.0.3
+The shell provides the Dashboard, sidebar navigation, portable configuration, applet discovery and loading, Suite Module infrastructure, common presentation settings, and integration points. Individual applets remain independently launchable and own their own inspection logic and runtime requirements.
 
-- Rebrands the program as **LinSpectacles** with the product line **Linux Inspection Suite** across the titlebar, Dashboard, About dialog, host identity and current documentation.
-- Adopts organisation ID **`linspectacles`** and GitHub organisation **`https://github.com/linspectacles`** while retaining **brunonlinespace** as publisher/editor.
-- Renames the portable host package/configuration/assets to the LinSpectacles identity and uses the supplied LinSpectacles icon/logo assets.
-- Retains the **Expose. Explore. Explain.** tagline and the existing 0.0.2 host behaviour otherwise.
+The current Suite source release is deliberately **shell-only**: applet and Suite Module payloads are installed separately and can follow their own release cadence.
 
-### 0.0.2
+## Highlights
 
-- Previous identity release updating the program/product labels across the Dashboard, titlebar, About dialog and documentation.
-- Replaces the former taglines with **Expose. Explore. Explain.**
-- Previous identity metadata update; **brunonlinespace** remains publisher/editor.
-- Fixes About-dialog spacing and margins so long identity/configuration text does not overlap surrounding content.
-- Dashboard **Inspection Coverage** and **Configuration → Applets** now list applets alphabetically by displayed applet name (A→Z), without changing sidebar/navigation organisation.
+- Modular, portable **Linux inspection host** with a dark interface.
+- Standalone-capable **applets** discovered from the root-level `applets/` store.
+- **Launch Standalone...** for the active applet, both above Configuration and from the sidebar context menu.
+- Manifest-first applet discovery: discovery reads `applet.json` without importing applet code.
+- Optional **lazy loading** so enabled applets are imported only when first opened.
+- Built-in **Dashboard** showing host-known applet coverage and Suite/session state without triggering applet scans.
+- Dashboard **Enabled Only** and **Loaded Only** filters for Inspection Coverage.
+- Portable host preferences, including metadata font and per-applet hidden-column state.
+- Independent **Suite Modules** for host-level capabilities that are not standalone inspectors.
+- **Module API 5**, with compatibility for Module API 1, 2, 3 and 4.
+- Separate module **Enabled** and **Dashboard** controls.
+- Reorderable module Dashboard/configuration contributions where the module permits it.
+- Module-contributed Tools/Help actions, Dashboard widgets, Configuration pages, Suite State items and Inspection Coverage data.
+- Offline module catalogue/manager; unknown installed modules remain discoverable rather than being rejected by a whitelist.
+- Explicit separation between applet inspection work and Suite Module host extensions.
+- Portable integration metadata for **Suite Pythoine**.
+- The LinSpectacles host itself remains unprivileged.
 
-### 0.0.1-exp9-r6-r2
+## Interface
 
-- Corrects the first Organizer integration performance path: sidebar search/navigation refresh no longer rediscover applet folders or rebuild Dashboard state on every keystroke, and sidebar rebuilds no longer emit `applets.changed` feedback into the Organizer.
-- Dashboard is now a fixed top sidebar button. Organizer search is always below Dashboard and cannot displace it.
-- Organizer category headings are normal case, bold, and use the Suite blue instead of all-caps headings.
-- Configuration → Modules removes module categories and the numeric Dashboard Order column. Installed module row position itself is the Dashboard/module order; Up/Down visibly moves the selected reorderable row. Catalogue-only rows remain informational below installed rows.
-- **Privileged Helpers** is the only currently fixed/non-reorderable module. **System Pulse** is reorderable again.
-- Modules remains the final management/module Configuration tab before About and the offline module catalogue remains permissive with Uncatalogued fallback for unknown installed modules.
+### Dashboard
 
-### 0.0.1-exp9-r6-r1
+Dashboard is the Suite's only built-in content page.
 
-- r1 hotfix: initialize Module API v5 navigation-provider state before the first sidebar rebuild, fixing the r6 startup AttributeError.
+It reports host-known state without opening applets or running their scans. The built-in surfaces include:
 
-- Core applet sidebar is alphabetical and no longer exposes applet Up/Down ordering.
-- Previous/next applet shortcuts are now `Ctrl+,` / `Ctrl+.`; `F5` returns to Dashboard.
-- Suite Module API v5 adds the optional host-owned navigation organizer contract, module-state inspection and applet activation service.
-- Configuration keeps **Modules** after module-contributed pages and before **About**, and Modules is now a permissive offline catalogue/manager showing known installed and uninstalled modules plus unknown installed modules as **Uncatalogued**.
-- Dashboard ordering controls are disabled for fixed/non-reorderable module contributions.
-- No module catalogue function performs network, store, download or automatic installation activity.
+- installed applet count
+- enabled applet count
+- applets loaded in the current session
+- lazy-loading state
+- enabled/installed Suite Module state
+- **Inspection Coverage** for discovered applets
 
-### 0.0.1-exp9-r5
+Inspection Coverage can be filtered with **Enabled Only** and **Loaded Only**. When both are selected, both conditions must be satisfied.
 
-- Removes the old host-hardcoded **System Identity** Dashboard card. System identity is now expected to be supplied by its independent Suite Module when installed/enabled, so the shell no longer duplicates that capability.
-- Makes the built-in **Dashboard vertically scrollable**, allowing module-contributed cards and the built-in coverage/state area to extend naturally beyond the current viewport.
-- **Configuration → Modules** now separates **Enabled** from **Dashboard**. Enabled controls whether module Python is activated; Dashboard independently shows/hides that module's Dashboard contributions without disabling its menus, configuration pages, events or other host features. Existing installations migrate with Dashboard visibility shown by default.
-- Dashboard visibility applies generically to module cards, Suite State lines, Inspection Coverage columns and legacy Summary annotations.
-- Adds Suite-level applet cycling in visible sidebar order: **Ctrl+Shift+,** selects the previous applet and **Ctrl+Shift+.** selects the next applet. Cycling wraps and deliberately skips Dashboard; from Dashboard the shortcuts enter the last/first applet respectively.
-- Suite Module API remains **v4**; existing modules require no source changes. Applets and Suite Module payloads remain independently released and are not reissued by this shell-only revision.
+Enabled Suite Modules may also contribute Dashboard content, Suite State items, and additional Inspection Coverage columns. Their Dashboard contributions can be hidden without disabling the module itself.
 
-### 0.0.1-exp9-r4
+### Sidebar
 
-- Adds **Suite Module API v4** while preserving API v1/v2/v3 compatibility. API v4 adds generic named **Inspection Coverage columns** so a module can expose meaningful per-applet state under its own column heading instead of reducing it to a generic Summary annotation.
-- API v3 Summary annotations remain supported for older modules, but the host no longer displays a Summary column unless an enabled legacy module actually contributes one.
-- This Suite source ZIP is now deliberately **shell-only**. Applets and Suite Modules have independent release cadences and are installed separately into the root-level `applets/` and `modules/` stores. Empty stores are created automatically on first run.
-- No applet or Suite Module implementation is bundled or reissued by this Suite-only revision.
+Dashboard remains fixed at the top of the sidebar.
 
-### 0.0.1-exp9-r3
+Enabled applets appear as the inspection views beneath it. The host can also accept a navigation model from an enabled organizer module while retaining host ownership of applet activation and lifecycle.
 
-- Adds **Suite Module API v3** while preserving API v1/v2 compatibility. API v3 adds generic Configuration-tab, Suite State-line and Inspection Coverage-summary contribution points, plus navigation to a contributed Configuration page.
-- **Configuration → Modules** now has **Up / Down** controls. The saved module order is authoritative for module-contributed Dashboard sections and contributed Configuration pages.
-- Inspection Coverage gains a generic **Summary** column for compact module-provided applet annotations.
-- Bundled **Privileged Helpers 0.0.2** removes its standalone Dashboard card. Its helper count/status is appended to **Suite State**, applicable applets receive **Helper** in Inspection Coverage → Summary, and central management now lives in **Configuration → Helpers**.
-- The Helpers page intentionally stays compact: helper inventory plus Refresh, Details, Install/Update/Reinstall and Remove actions. Publisher/path/ownership/mode/SHA-256 facts and the Standard access vs With helper comparison live behind **Details...**.
-- **Tools → Privileged Helpers...** remains as a shortcut and now opens Configuration directly on the Helpers tab.
-- Existing inspector applet implementations are unchanged from exp9-r2; no standalone applet packages are reissued for this Suite/module UI revision.
+When an applet is active, **Launch Standalone...** starts the applet's declared standalone launcher as a separate process. The embedded applet remains in place.
 
-### 0.0.1-exp9-r2
+### Help and Tools
 
-- Adds **Suite Module API v2** while keeping API v1 modules compatible. API v2 adds `context.get_applet_metadata()`, a manifest-only capability that lets enabled Suite Modules inspect declarative applet capabilities without importing applet code or triggering applet scans.
-- Bundles **Privileged Helpers 0.0.1** as an optional, disabled-by-default Suite Module. It consumes Privileged Helper Contract v1 declarations generically rather than hard-coding individual applets.
-- Privileged Helpers provides central helper inventory, installed/update-repair state, ownership/mode/hash facts, and the applet-declared **Standard access vs With helper** comparison.
-- Helper install/update/repair/remove is explicit and PolicyKit-mediated. Installing a helper never activates privilege; elevated sessions remain controlled by the applet's own dedicated Privileged Inspection window.
-- Central helper installation is restricted to read-only, window-ephemeral contracts with a SHA-256-verified packaged payload and direct `/usr/libexec/linspectacles-*` target. The hash is presented as package consistency, not as third-party publisher authentication.
-- All bundled inspector applet implementations are preserved byte-for-byte from exp9-r1. Current independently issued applet packages, such as SELinux Inspector 0.0.4-r4, can be installed into the applet store normally.
+The built-in **Help** menu provides:
 
-### 0.0.1-exp9-r1
+- Documentation
+- GitHub Repository
+- Raise an Issue
+- About LinSpectacles
 
-- Configuration now gives **Suite Modules** their own dedicated final tab, ordered **Applets → Appearance → Startup → Modules**, keeping applet management and Suite-extension management visually distinct. Module behaviour and API v1 are otherwise unchanged.
+**Tools** is an extension point and remains hidden unless an enabled Suite Module contributes an action.
 
-### 0.0.1-exp9
+## Applets
 
-- Adds **Suite Module API v1** as a generic, versioned host-extension layer separate from standalone inspector applets.
-- Suite Modules are discovered manifest-first from the root-level `modules/` folder. Disabled modules are not imported and modules never appear in the sidebar.
-- **Configuration → Modules** provides enable/disable, Add Module, Remove, Refresh and Open Modules Folder controls. User-installed modules remain disabled until explicitly enabled.
-- API v1 provides generic Help/Tools menu contributions, quiet Dashboard widget contributions, applet state/current-selection access, portable namespaced module storage, status reporting and a small event bus. Module contributions are automatically cleaned up when disabled/removed.
-- The **Tools** menu remains hidden unless an enabled module contributes to it; the Dashboard module area remains hidden when empty.
-- No Suite Module is bundled yet: this revision establishes the framework before Encyclopedia or other modules are introduced.
-- All eight bundled inspector applet implementations are preserved byte-for-byte from 0.0.1-exp8. No separate applet packages are reissued with this Suite-only revision.
+An **applet** is a focused inspection application that can run independently or integrate into LinSpectacles.
 
-### 0.0.1-exp8
+LinSpectacles discovers applets from:
 
-- Rebuilds the built-in Dashboard as an inspection overview rather than an app launcher: branded header, host-level system identity, non-invasive applet coverage table, and Suite/session state.
-- Dashboard does **not** import/open applets or trigger any applet scan. Enabled/disabled and loaded/not-loaded states come only from the host registry/session.
-- Configuration tab order in exp8 was **Applets → Appearance → Startup**; exp9-r1 adds **Modules** as the final dedicated tab.
-- All eight bundled applet implementations are preserved unchanged from 0.0.1-exp7-r1.
+```text
+applets/
+```
 
-### 0.0.1-exp7-r1
+A standard applet provides:
 
-- Hotfix: SELinux Inspector now correctly re-exports its `create_applet` factory from the package root so the LinSpectacles applet loader can instantiate it. No SELinux inspection behavior changed.
+```text
+applets/my_applet/
+  applet.json
+  __init__.py
+  applet.py
+  standalone.py
+```
 
-### 0.0.1-exp7
+The applet factory returns a Qt widget for embedded use. The declared `standalone.py` remains the independent launcher.
 
-- Resource Monitor is intentionally **decoupled from LinSpectacles** while ResMon GUI/TUI development continues independently; the LinSpectacles package no longer includes a Resource Monitor applet or `psutil` dependency.
-- Adds **SELinux Inspector 0.0.1** as a removable standalone applet with Status, Booleans, Process Contexts, Recent Denials and File Context Check views.
-- Recent SELinux AVC/USER_AVC denials are **not scanned automatically**. Users can scan normally, or explicitly choose **Scan with Privileged Access...** when audit permissions require it. The privileged path runs only `ausearch` through `pkexec`; the LinSpectacles GUI itself remains unprivileged and no SELinux policy/settings are changed.
-- File Context Check compares the current label with the policy expectation using read-only tools and never runs `chcon` or `restorecon`.
-- SELinux Inspector participates in the existing metadata-font preference, right-click column visibility and Plain Text-first export system.
+Applets must not import `linspectacles.*`; the standalone boundary is intentional.
 
-### 0.0.1-exp6
+### Applet management
 
-- **Configuration → Appearance** now lets the user choose the actual installed font and size used by metadata/details panes with Qt's native font chooser; the selection is persisted portably and applied to loaded applets. The applet text panes also apply a local font QSS override so the suite's global UI stylesheet cannot force the proportional interface font back onto metadata.
-- Every inspector applet except the then-bundled Resource Monitor now has **Export...** as the far-right top action. Export uses already-collected data only, defaults to **Plain Text**, and also offers CSV, JSON and Markdown. Boot Inspector exports its cached boot summary and critical chain; Environment Variables redacts likely secret/token/password values in exports. Scan-only applets keep Export disabled until a successful scan.
-- Right-click the left-table column header in inspector applets to tick/untick visible columns. At least one column must remain visible, and choices are stored per applet in the portable host configuration.
-- Resource Monitor kept its existing sampler/logic in exp6 and received the standard applet framing; it is decoupled from LinSpectacles as of exp7.
-- TUI work remains intentionally deferred; no curses/TUI runtime is added in this revision.
+Use **Configuration... → Applets** to:
 
-### 0.0.1-exp5-r1
+- enable or disable an installed applet
+- add an applet ZIP
+- remove an applet
+- refresh discovery
+- open the applets folder
 
-- Metadata/details text panes now default to Qt generic `Monospace` at 10 pt with `QFont.StyleHint.Monospace`, matching the reference PyQt inspector.
+Disabling an applet hides it without deleting its files. Removing it deletes that applet folder from the portable copy.
 
-UI/metadata refinement: Help now follows the Pad-family sequence (Documentation, repository, issue reporting, About); host titlebar naming no longer duplicates the application display name; applet management is folded into **Configuration...** on an **Applets** tab; inspector metadata panes use the platform fixed-width system font; and AppImage discovery now correctly parses common versioned filenames and reads ELF architecture metadata.
+ZIP installation requires one top-level applet directory and a valid manifest. Applet discovery itself does not execute applet code.
 
-### 0.0.1-exp4
+### Applet identity
 
-Architecture revision: Resource Monitor returns to modular applet status and can be enabled, disabled, removed or run standalone like every other utility. The host now opens on a non-duplicative Dashboard that reports applet/lazy-loading status but does not repeat sidebar navigation controls. Boot Inspector no longer probes systemd on construction; boot analysis runs only after the user presses **Scan Boot**. Resource Monitor's live sampler activates only while its applet is selected.
+Newly prefixed applet manifests may use:
 
-### 0.0.1-exp3-r1
+```text
+linspectacles-<applet-id>
+```
 
-Hotfix: restores the missing `Qt` and `QTableWidgetItem` imports in the modular Installed Software applet.
+Legacy unprefixed IDs remain accepted.
 
-## Run
+For host configuration, navigation and Module API consumers, the prefixed and legacy forms resolve to the same logical applet identity. The mistaken historical `linspector-<applet-id>` prefix is not accepted.
+
+### Inspection behavior
+
+Applet scan behavior belongs to the applet.
+
+Potentially expensive or policy-sensitive inspection can remain behind an explicit applet Scan action even when Suite lazy loading is disabled. The Dashboard does not cause an applet scan merely to report coverage state.
+
+Official non-live inspector applets may expose **Export...** for already-collected data. Export must not silently trigger additional inspection.
+
+## Suite Modules
+
+A **Suite Module** extends the LinSpectacles host rather than inspecting a Linux subsystem as a standalone application.
+
+Modules live in:
+
+```text
+modules/
+```
+
+A standard module provides:
+
+```text
+modules/my_module/
+  module.json
+  module.py
+```
+
+Discovery reads `module.json` only. Python is imported only when the module is enabled.
+
+Suite Modules never become sidebar applets.
+
+### Module management
+
+Use **Configuration... → Modules** to:
+
+- see installed and catalogue-known modules
+- enable or disable an installed module
+- independently show or hide its Dashboard contributions
+- add a module ZIP
+- remove a module
+- move reorderable modules Up or Down
+- refresh discovery
+- open the modules folder
+
+Newly user-installed modules are left **disabled** after installation, keeping installation and execution as separate trust decisions.
+
+The catalogue is offline and permissive. It does not download or automatically install modules, and an unknown installed module can still appear as **Uncatalogued**.
+
+### Module API
+
+The current host provides **Module API 5** and remains compatible with APIs 1–4.
+
+Documented module services include:
+
+- Help and Tools menu actions
+- Dashboard widgets
+- Configuration pages
+- Suite State items
+- Inspection Coverage annotations and named columns
+- host-known applet state
+- declarative applet manifest metadata
+- current-applet state and applet activation
+- portable namespaced module storage
+- status reporting
+- Suite events
+- optional host-owned navigation organization
+
+Module contributions registered through the host context are tracked and cleaned up when the module is disabled or removed.
+
+See `MODULE-SDK.md` for the complete contract.
+
+## Configuration
+
+The base Configuration pages are:
+
+```text
+Applets → Appearance → Startup → Modules → About
+```
+
+An enabled Applet Organizer module may contribute a page before **Applets**. Other enabled module-owned Configuration pages are placed after **Startup** and before **Modules**.
+
+### Applets
+
+Manage installed applets and their enabled state.
+
+### Appearance
+
+Choose the font used by metadata/details panes in inspector applets. The selected font is applied to loaded applets when Configuration closes.
+
+### Startup
+
+**Lazy-load utilities** controls whether enabled applets are imported on first use or initialized during Suite startup.
+
+Suite Modules are separate: enabled modules activate at startup because they contribute host features rather than sidebar views.
+
+### Modules
+
+Manage Suite Module installation, activation, Dashboard visibility and contribution order.
+
+### About
+
+Shows LinSpectacles identity, version, organisation ID, repository, copyright and GPL licensing information.
+
+## Useful keyboard shortcuts
+
+| Shortcut | Action |
+| --- | --- |
+| `Ctrl+,` | Previous Applet |
+| `Ctrl+.` | Next Applet |
+| `F5` | Dashboard |
+| `F1` | Documentation |
+
+Previous/Next Applet follows the current visible sidebar order, wraps at either end, and skips Dashboard.
+
+## Portable layout
+
+The Suite uses a portable layout around `main.py`:
+
+```text
+main.py
+linspectacles/
+assets/
+applets/
+modules/
+config/
+APPLET-SDK.md
+MODULE-SDK.md
+suite-pythoine-extension.json
+LICENSE
+README.md
+```
+
+Key roles:
+
+- `main.py` — stable host entrypoint
+- `linspectacles/` — Dashboard host shell, configuration, applet loader and Suite Module infrastructure
+- `assets/` — LinSpectacles application artwork
+- `applets/` — removable standalone-capable inspection utilities
+- `modules/` — optional Suite-level capabilities
+- `config/` — portable host preferences and namespaced module data
+- `APPLET-SDK.md` — applet integration contract
+- `MODULE-SDK.md` — Suite Module integration contract
+- `suite-pythoine-extension.json` — Suite Pythoine extension identity/launch descriptor
+
+The `applets/` and `modules/` stores may be created beside the host as components are installed.
+
+## Suite Pythoine
+
+LinSpectacles remains independently runnable.
+
+Suite Pythoine integration is exposed through the bundled extension descriptor:
+
+```bash
+python3 main.py --suite-pythoine
+```
+
+launches the same LinSpectacles application, while:
+
+```bash
+python3 main.py --component-info
+```
+
+prints the extension descriptor as JSON.
+
+The descriptor identifies LinSpectacles as a portable Linux **Extension**, with no file-routing or new-file role.
+
+## Running from source
+
+LinSpectacles requires **Python 3** and **PyQt6**.
+
+From the portable source root:
 
 ```bash
 python3 main.py
 ```
 
-The host requires Python 3 and PyQt6. Applets own their additional requirements and may use ordinary Linux tools such as `systemd-analyze`, `systemctl`, `journalctl`, `modinfo`, RPM/dpkg/pacman, Flatpak or Snap when available. SELinux Inspector uses standard SELinux/audit tools when installed (`sestatus`, `getenforce`, `getsebool`, optional `semanage`, `ausearch`, `matchpathcon`) and can optionally invoke only `ausearch` via `pkexec` after explicit user approval. Removing an applet also removes that applet's runtime requirement from normal host use.
+Useful launch forms:
 
-## Portable layout
+```bash
+python3 main.py --suite-pythoine
+python3 main.py --component-info
+```
 
-- `main.py` — stable host entrypoint
-- `linspectacles/` — Dashboard host shell, configuration, applet loader and Suite Module API/loader
-- `applets/` — removable self-contained utilities; Resource Monitor remains intentionally decoupled
-- `modules/` — optional Suite-level capabilities; never shown in the sidebar
-- `config/` — portable host preferences plus namespaced module data when used
-- `suite-pythoine-extension.json` — extension identity/launch descriptor
+Applet-specific dependencies belong to the individual applets rather than to the host.
 
-There is no AppImage builder or Windows installer. The Suite itself never runs as root; the optional Privileged Helpers module can perform explicit PolicyKit-mediated install/update/remove operations for narrowly declared read-only applet helpers.
+## Current release
 
-## Dashboard
+Version **0.0.4-r1** is a focused shell revision.
 
-Dashboard is the only built-in content page. The host itself shows LinSpectacles branding, installed/enabled applet coverage, loaded/not-loaded session state and lazy-loading/module status. Linux **System Identity is no longer hardcoded into the shell**; when desired, that information is provided by the independent System Identity Suite Module.
+It retains the 0.0.4 behavior and corrects **Configuration → Modules** table sizing so the **Suite Module** column stretches to use the available width while Installed, Enabled, Dashboard, Version and Editor remain content-sized, including after Refresh, Add and Remove operations.
 
-The Dashboard is vertically scrollable and deliberately contains no utility-launch buttons or applet scan triggers. Enabled Suite Modules may contribute Dashboard content, but **Configuration → Modules → Dashboard** can hide those contributions without disabling the module itself. Applet navigation belongs to the sidebar; **Ctrl+Shift+,** / **Ctrl+Shift+.** cycle previous/next enabled applets in the current sidebar order.
+Version 0.0.4 introduced the Suite-owned **Launch Standalone...** action for active applets, the current Configuration-page placement rules, and the Dashboard **Enabled Only / Loaded Only** coverage filters.
 
-## Suite Pythoine
+## Configuration storage
 
-LinSpectacles remains independently runnable. `main.py --suite-pythoine` launches the same application without changing its behavior, and `main.py --component-info` prints the bundled extension descriptor as JSON. The descriptor identifies LinSpectacles as a non-routing **Extension** with `main.py` as its portable entrypoint. Suite Pythoine catalogue registration can use this metadata when desired.
+Host preferences are stored portably in:
 
-GitHub: `https://github.com/linspectacles`
+```text
+config/linspectacles.json
+```
 
-## Applets
+The configuration includes lazy-loading state, disabled applets, metadata font, per-applet hidden columns, module enabled state, module Dashboard visibility and module order.
 
-Use **Configuration... → Applets** to enable/disable, add, remove, reorder, refresh or open the root-level applet store. Applets may also be copied into or removed from `applets/` manually. Installed applets remain independently launchable through their own `standalone.py` and do not import `linspectacles.*`. This shell-only source ZIP does not carry applet payloads.
+Each Suite Module can also receive its own portable storage directory under:
 
-Applet scan behaviour is owned by each independently released applet. The Suite host does not trigger an applet inspection merely to populate Dashboard coverage information.
-
-See `APPLET-SDK.md` for the applet contract and `MODULE-SDK.md` for Suite Module API v4 (with API v1/v2/v3 compatibility).
-
-## Suite Modules
-
-Suite Modules enhance the LinSpectacles workbench rather than inspect a Linux subsystem. They are managed under the dedicated **Configuration... → Modules** tab and never appear in the sidebar. Discovery reads `module.json` only; disabled modules are not imported. The **Enabled** checkbox controls module activation, while the independent **Dashboard** checkbox controls whether that enabled module's Dashboard contributions are presented. Enabled modules may still contribute Help/Tools actions, configuration pages and other documented host services while hidden from the Dashboard, and may observe host-known applet state without triggering scans.
-
-Suite Modules are released independently from the Suite shell. Install them with **Configuration → Modules → Add Module...** or place them in the root-level `modules/` store. The Suite source ZIP does not bundle module payloads merely because the host API changed.
+```text
+config/modules/<module-id>/
+```
 
 ## Branding
 
-The approved LinSpectacles mark is the half-normal, half-X-ray penguin roundel in `assets/`. The host uses it as the application icon and in the Pad-family-style **About — LinSpectacles** dialog. Official standalone applets carry a local branded icon while remaining independent of the host.
+The approved LinSpectacles mark is stored under `assets/` and is used for Suite application identity and About presentation.
+
+The project identity is:
+
+```text
+LinSpectacles
+Linux Inspection Suite
+Expose. Explore. Explain.
+```
+
+Technical organisation ID:
+
+```text
+linspectacles
+```
+
+Publisher/editor identity:
+
+```text
+brunonlinespace
+```
+
+## License
+
+LinSpectacles is licensed under the **GNU General Public License v3.0 or later**.
+
+See `LICENSE` for the complete license text.
+
+Copyright © 2026 **brunonlinespace**.
+
+## Links
+
+- LinSpectacles Suite: <https://github.com/linspectacles/linspectacles-suite>
+- Issues: <https://github.com/linspectacles/linspectacles-suite/issues>
+- LinSpectacles organisation: <https://github.com/linspectacles/>
+- brunonlinespace: <https://github.com/brunonlinespace/>
