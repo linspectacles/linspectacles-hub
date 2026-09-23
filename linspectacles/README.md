@@ -1,6 +1,6 @@
 # LinSpectacles — Linux Inspection Suite
 
-<p align="center"><img src="assets/linspectacles-logo.png" alt="LinSpectacles penguin X-ray roundel" width="180"></p>
+<p align="center"><img src="../assets/linspectacles-logo.png" alt="LinSpectacles penguin X-ray roundel" width="180"></p>
 
 **Version 0.0.4-r1** · Organisation ID: **linspectacles** · Publisher/editor: **brunonlinespace** · GPLv3-or-later
 
