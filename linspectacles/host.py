@@ -8,7 +8,7 @@ import json
 import sys
 from pathlib import Path
 
-from PyQt6.QtCore import Qt, QUrl
+from PyQt6.QtCore import QProcess, Qt, QUrl
 from PyQt6.QtGui import QAction, QColor, QDesktopServices, QFont, QIcon, QPixmap
 from PyQt6.QtWidgets import (
     QAbstractItemView,
@@ -44,6 +44,7 @@ from . import (
 from .applets import AppletRegistry
 from .config import PortableConfig
 from .modules import EventBus, ModuleContext, ModuleRegistry
+from .paths import RuntimePaths
 from .styles import DARK_STYLESHEET
 
 DASHBOARD_ID = "__dashboard__"
@@ -52,14 +53,16 @@ DASHBOARD_ID = "__dashboard__"
 # never a whitelist and never performs network/store/install operations.
 MODULE_CATALOG = {
     "applet-organizer": {"name": "Applet Organizer", "dashboard_reorderable": True},
+    "boot-environment": {"name": "Boot Environment", "dashboard_reorderable": True},
     "encyclopedia": {"name": "Encyclopedia & What's This?", "dashboard_reorderable": True},
     "privileged-helpers": {"name": "Privileged Helpers", "dashboard_reorderable": False},
+    "system-identity": {"name": "System Identity", "dashboard_reorderable": True},
     "system-pulse": {"name": "System Pulse", "dashboard_reorderable": True},
 }
 
 
 class ConfigurationDialog(QDialog):
-    """Applet, appearance, startup and Suite Module configuration."""
+    """Applet, appearance, startup and Hub Module configuration."""
 
     def __init__(
         self, registry, module_registry, config, parent=None,
@@ -84,6 +87,45 @@ class ConfigurationDialog(QDialog):
         self.tabs = tabs
         root.addWidget(tabs, 1)
 
+        # Module API v3 Configuration pages are host-owned. The Applet
+        # Organizer is the one contributed page with a fixed Suite position:
+        # when present it precedes Applets; other module pages remain after
+        # Startup and before Modules.
+        self.dynamic_page_indexes = {}
+
+        def add_module_configuration_page(contribution):
+            try:
+                module_id, page_id, label, factory = contribution
+                page = factory(tabs)
+                if page is None or not isinstance(page, QWidget):
+                    raise TypeError("Configuration page factory did not return QWidget")
+            except Exception as exc:
+                module_id = contribution[0] if len(contribution) > 0 else ""
+                page_id = contribution[1] if len(contribution) > 1 else ""
+                label = contribution[2] if len(contribution) > 2 else "Hub Module"
+                page = QWidget()
+                error_layout = QVBoxLayout(page)
+                error_layout.setContentsMargins(12, 12, 12, 12)
+                error = QLabel(f"Could not create this Hub Module configuration page:\n{exc}")
+                error.setWordWrap(True)
+                error_layout.addWidget(error)
+                error_layout.addStretch(1)
+            index = tabs.addTab(page, str(label))
+            self.dynamic_pages.append(page)
+            self.dynamic_page_indexes[(str(module_id), str(page_id))] = index
+            self.dynamic_page_indexes[str(page_id)] = index
+
+        organizer_pages = [
+            contribution for contribution in self.module_pages
+            if str(contribution[0]) == "applet-organizer"
+        ]
+        other_module_pages = [
+            contribution for contribution in self.module_pages
+            if str(contribution[0]) != "applet-organizer"
+        ]
+        for contribution in organizer_pages:
+            add_module_configuration_page(contribution)
+
         # ------------------------------------------------------------------
         # Applets. The sidebar continues to discover only applets; Suite
         # Modules are configured separately on the dedicated Modules tab.
@@ -94,34 +136,43 @@ class ConfigurationDialog(QDialog):
         applets_layout.setSpacing(10)
 
         applets_note = QLabel(
-            "Optional utilities are discovered from the applets folder beside main.py. "
-            "Disable hides an applet without deleting it; Remove deletes its folder from this portable copy."
+            "Applets are discovered from the active user/portable store and, in RPM installs, "
+            "the system applet store. A user copy takes precedence over a system copy with the "
+            "same applet ID. Disable hides an applet without deleting it; Remove applies only "
+            "to user/portable applets. System-installed applets are managed by DNF."
         )
         applets_note.setWordWrap(True)
         applets_layout.addWidget(applets_note)
 
-        self.table = QTableWidget(0, 4)
-        self.table.setHorizontalHeaderLabels(["Enabled", "Applet", "Version", "Editor"])
+        self.table = QTableWidget(0, 5)
+        self.table.setHorizontalHeaderLabels(["Enabled", "Applet", "Source", "Version", "Editor"])
         self.table.verticalHeader().setVisible(False)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.table.horizontalHeader().setStretchLastSection(True)
+        applet_header = self.table.horizontalHeader()
+        applet_header.setStretchLastSection(False)
+        applet_header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        applet_header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        applet_header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        applet_header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        applet_header.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
         applets_layout.addWidget(self.table, 2)
 
         controls = QHBoxLayout()
         add_btn = QPushButton("Add Applet...")
-        remove_btn = QPushButton("Remove")
+        self.remove_applet_btn = QPushButton("Remove")
         refresh_btn = QPushButton("Refresh")
         open_btn = QPushButton("Open Applets Folder")
         add_btn.clicked.connect(self.add_applet)
-        remove_btn.clicked.connect(self.remove_applet)
+        self.remove_applet_btn.clicked.connect(self.remove_applet)
         refresh_btn.clicked.connect(self.refresh_applets)
         open_btn.clicked.connect(
             lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.registry.store)))
         )
-        for button in (add_btn, remove_btn, refresh_btn, open_btn):
+        for button in (add_btn, self.remove_applet_btn, refresh_btn, open_btn):
             controls.addWidget(button)
+        self.table.itemSelectionChanged.connect(self._update_applet_remove_control)
         controls.addStretch(1)
         applets_layout.addLayout(controls)
 
@@ -187,7 +238,7 @@ class ConfigurationDialog(QDialog):
             "When enabled, applets are imported only when first opened. "
             "When disabled, enabled applets are initialized during LinSpectacles startup. "
             "Live applets activate only while selected. Boot and package inventories remain Scan-only. "
-            "Enabled Suite Modules activate at Suite startup because they contribute host features rather than sidebar views."
+            "Enabled Hub Modules activate at Hub startup because they contribute host features rather than sidebar views."
         )
         note.setWordWrap(True)
         startup_layout.addWidget(note)
@@ -195,52 +246,61 @@ class ConfigurationDialog(QDialog):
         tabs.addTab(startup_page, "Startup")
 
         # ------------------------------------------------------------------
-        # Suite Modules
+        # Hub Modules
         # ------------------------------------------------------------------
         modules_page = QWidget()
         modules_layout = QVBoxLayout(modules_page)
         modules_layout.setContentsMargins(12, 12, 12, 12)
         modules_layout.setSpacing(10)
 
-        modules_heading = QLabel("Suite Modules")
+        modules_heading = QLabel("Hub Modules")
         modules_heading_font = modules_heading.font()
         modules_heading_font.setBold(True)
         modules_heading.setFont(modules_heading_font)
         modules_layout.addWidget(modules_heading)
 
         modules_note = QLabel(
-            "This is an offline catalogue and manager for LinSpectacles Modules. Installed modules can be "
+            "This is an offline catalogue and manager for LinSpectacles Hub Modules. Installed modules can be "
             "enabled/disabled and their Dashboard visibility controlled here; known but uninstalled modules are "
-            "shown for discovery only. Nothing is downloaded or installed from the catalogue. Unknown installed "
-            "modules remain visible as Uncatalogued. For installed Dashboard modules, the row position is the "
-            "Dashboard order: select a reorderable module and use Up/Down to move the row. Fixed modules do not "
-            "offer Dashboard reordering."
+            "shown for discovery only. In RPM installs, user modules take precedence over system-installed modules "
+            "with the same ID. Remove applies only to user/portable modules; system-installed modules are managed "
+            "by DNF. Unknown installed modules remain visible as Uncatalogued. For installed Dashboard modules, "
+            "the row position is the Dashboard order: select a reorderable module and use Up/Down to move the row. "
+            "Fixed modules do not offer Dashboard reordering."
         )
         modules_note.setWordWrap(True)
         modules_note.setStyleSheet("color:#b8b8b8;")
         modules_layout.addWidget(modules_note)
 
-        self.module_table = QTableWidget(0, 6)
+        self.module_table = QTableWidget(0, 7)
         self.module_table.setHorizontalHeaderLabels(
-            ["Installed", "Enabled", "Dashboard", "Suite Module", "Version", "Editor"]
+            ["Installed", "Enabled", "Dashboard", "Hub Module", "Source", "Version", "Editor"]
         )
         self.module_table.verticalHeader().setVisible(False)
         self.module_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.module_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.module_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.module_table.horizontalHeader().setStretchLastSection(True)
+        module_header = self.module_table.horizontalHeader()
+        module_header.setStretchLastSection(False)
+        module_header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        module_header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        module_header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        module_header.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+        module_header.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
+        module_header.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
+        module_header.setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
         self.module_table.setMinimumHeight(120)
         modules_layout.addWidget(self.module_table, 1)
 
         module_controls = QHBoxLayout()
         add_module_btn = QPushButton("Add Module...")
-        remove_module_btn = QPushButton("Remove")
+        self.remove_module_btn = QPushButton("Remove")
         self.module_up_btn = QPushButton("Up")
         self.module_down_btn = QPushButton("Down")
         refresh_module_btn = QPushButton("Refresh")
         open_modules_btn = QPushButton("Open Modules Folder")
         add_module_btn.clicked.connect(self.add_module)
-        remove_module_btn.clicked.connect(self.remove_module)
+        self.remove_module_btn.clicked.connect(self.remove_module)
         self.module_up_btn.clicked.connect(lambda: self.move_selected_module(-1))
         self.module_down_btn.clicked.connect(lambda: self.move_selected_module(1))
         refresh_module_btn.clicked.connect(self.refresh_modules)
@@ -249,7 +309,7 @@ class ConfigurationDialog(QDialog):
         )
         for button in (
             add_module_btn,
-            remove_module_btn,
+            self.remove_module_btn,
             self.module_up_btn,
             self.module_down_btn,
             refresh_module_btn,
@@ -258,28 +318,9 @@ class ConfigurationDialog(QDialog):
             module_controls.addWidget(button)
         module_controls.addStretch(1)
         modules_layout.addLayout(module_controls)
-        # Module API v3 Configuration pages. Enabled modules register a page
-        # factory; the host owns tab placement and creates the page only when
-        # Configuration itself is opened.
-        self.dynamic_page_indexes = {}
-        for contribution in self.module_pages:
-            try:
-                module_id, page_id, label, factory = contribution
-                page = factory(tabs)
-                if page is None or not isinstance(page, QWidget):
-                    raise TypeError("Configuration page factory did not return QWidget")
-            except Exception as exc:
-                page = QWidget()
-                error_layout = QVBoxLayout(page)
-                error_layout.setContentsMargins(12, 12, 12, 12)
-                error = QLabel(f"Could not create this Suite Module configuration page:\n{exc}")
-                error.setWordWrap(True)
-                error_layout.addWidget(error)
-                error_layout.addStretch(1)
-            index = tabs.addTab(page, str(label))
-            self.dynamic_pages.append(page)
-            self.dynamic_page_indexes[(str(module_id), str(page_id))] = index
-            self.dynamic_page_indexes[str(page_id)] = index
+        # Other enabled module-owned Configuration pages follow Startup.
+        for contribution in other_module_pages:
+            add_module_configuration_page(contribution)
 
         # Keep Modules after every enabled module-owned Configuration page.
         self.modules_tab_index = tabs.addTab(modules_page, "Modules")
@@ -294,6 +335,7 @@ class ConfigurationDialog(QDialog):
         about_layout.setSpacing(8)
 
         program_root = Path(getattr(parent, "program_root", Path(__file__).resolve().parents[1])).resolve()
+        runtime_paths = getattr(parent, "runtime_paths", RuntimePaths.for_program(program_root))
 
         icon_label = QLabel()
         icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -311,9 +353,13 @@ class ConfigurationDialog(QDialog):
                 )
         about_layout.addWidget(icon_label, alignment=Qt.AlignmentFlag.AlignHCenter)
 
-        name = QLabel("<h2 style='margin:0'>LinSpectacles</h2>")
+        name = QLabel("<h2 style='margin:0'>LinSpectacles Hub</h2>")
         name.setAlignment(Qt.AlignmentFlag.AlignCenter)
         about_layout.addWidget(name)
+
+        subtitle = QLabel("<b>Linux Inspection Suite</b>")
+        subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        about_layout.addWidget(subtitle)
 
         version = QLabel(f"Version {VERSION}")
         version.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -332,7 +378,7 @@ class ConfigurationDialog(QDialog):
         about_layout.addWidget(desc)
 
         details = QLabel(
-            "<b>Build:</b> Modular portable source<br>"
+            f"<b>Build:</b> {runtime_paths.build_label}<br>"
             "<b>Organisation ID:</b> "
             f"<a href='{ORGANIZATION_URL}'>{ORGANIZATION_ID}</a>"
         )
@@ -496,11 +542,21 @@ class ConfigurationDialog(QDialog):
             enabled_item.setData(Qt.ItemDataRole.UserRole, manifest.applet_id)
             self.table.setItem(row, 0, enabled_item)
             self.table.setItem(row, 1, QTableWidgetItem(manifest.name))
-            self.table.setItem(row, 2, QTableWidgetItem(manifest.version))
-            self.table.setItem(row, 3, QTableWidgetItem(manifest.editor))
+            source_item = QTableWidgetItem(manifest.source)
+            source_item.setToolTip(str(manifest.directory))
+            self.table.setItem(row, 2, source_item)
+            self.table.setItem(row, 3, QTableWidgetItem(manifest.version))
+            self.table.setItem(row, 4, QTableWidgetItem(manifest.editor))
 
-        self.table.resizeColumnsToContents()
+        applet_header = self.table.horizontalHeader()
+        applet_header.setStretchLastSection(False)
+        applet_header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        applet_header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        applet_header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        applet_header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        applet_header.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
         self.table.itemChanged.connect(self._enabled_changed)
+        self._update_applet_remove_control()
 
     def _enabled_changed(self, item):
         if item.column() != 0:
@@ -519,6 +575,20 @@ class ConfigurationDialog(QDialog):
             return None
         item = self.table.item(row, 0)
         return item.data(Qt.ItemDataRole.UserRole) if item else None
+
+    def _update_applet_remove_control(self):
+        if not hasattr(self, "remove_applet_btn"):
+            return
+        applet_id = self.selected_id()
+        manifest = self.registry.manifests.get(applet_id) if applet_id else None
+        removable = bool(manifest and manifest.removable)
+        self.remove_applet_btn.setEnabled(removable)
+        if manifest is None:
+            self.remove_applet_btn.setToolTip("Select a user/portable applet to remove.")
+        elif removable:
+            self.remove_applet_btn.setToolTip("Remove this applet from the writable applet store.")
+        else:
+            self.remove_applet_btn.setToolTip("System-installed applets are managed by DNF.")
 
     def add_applet(self):
         filename, _ = QFileDialog.getOpenFileName(
@@ -553,10 +623,19 @@ class ConfigurationDialog(QDialog):
         manifest = self.registry.manifests.get(applet_id)
         if not manifest:
             return
+        if not manifest.removable:
+            QMessageBox.information(
+                self,
+                "Remove Applet",
+                f"'{manifest.name}' is system-installed and is managed by DNF. "
+                "LinSpectacles will not delete RPM-owned applet files.",
+            )
+            return
+        location = "portable" if manifest.source == "Portable" else "user"
         answer = QMessageBox.question(
             self,
             "Remove Applet",
-            f"Remove '{manifest.name}' from this portable LinSpectacles copy?\n\n"
+            f"Remove '{manifest.name}' from the {location} LinSpectacles applet store?\n\n"
             "Its applet folder will be deleted.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
@@ -571,7 +650,7 @@ class ConfigurationDialog(QDialog):
         except Exception as exc:
             QMessageBox.critical(self, "Remove Applet", str(exc))
 
-    # ----- Suite Modules -------------------------------------------------
+    # ----- Hub Modules -------------------------------------------------
     def refresh_modules(self):
         try:
             self.module_table.itemChanged.disconnect(self._module_setting_changed)
@@ -619,23 +698,39 @@ class ConfigurationDialog(QDialog):
             else:
                 enabled_item.setFlags(enabled_item.flags() & ~Qt.ItemFlag.ItemIsEnabled)
                 dashboard_item.setFlags(dashboard_item.flags() & ~Qt.ItemFlag.ItemIsEnabled)
-                enabled_item.setToolTip("Catalogue entry — module is not installed in this portable copy.")
-                dashboard_item.setToolTip("Catalogue entry — module is not installed in this portable copy.")
+                enabled_item.setToolTip("Catalogue entry — module is not installed in the active module store.")
+                dashboard_item.setToolTip("Catalogue entry — module is not installed in the active module store.")
             self.module_table.setItem(row, 1, enabled_item)
             self.module_table.setItem(row, 2, dashboard_item)
             self.module_table.setItem(row, 3, QTableWidgetItem(manifest.name if manifest else str(catalog.get("name", module_id))))
-            self.module_table.setItem(row, 4, QTableWidgetItem(manifest.version if manifest else "—"))
-            self.module_table.setItem(row, 5, QTableWidgetItem(manifest.editor if manifest else "—"))
+            source_item = QTableWidgetItem(manifest.source if manifest else "Catalogue")
+            source_item.setToolTip(str(manifest.directory) if manifest else "Offline catalogue entry")
+            self.module_table.setItem(row, 4, source_item)
+            self.module_table.setItem(row, 5, QTableWidgetItem(manifest.version if manifest else "—"))
+            self.module_table.setItem(row, 6, QTableWidgetItem(manifest.editor if manifest else "—"))
 
-        self.module_table.resizeColumnsToContents()
-        self.module_table.horizontalHeader().setStretchLastSection(True)
+        module_header = self.module_table.horizontalHeader()
+        module_header.setStretchLastSection(False)
+        module_header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        module_header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        module_header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        module_header.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+        module_header.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
+        module_header.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
+        module_header.setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
         self.module_table.itemChanged.connect(self._module_setting_changed)
         try:
             self.module_table.itemSelectionChanged.disconnect(self._update_module_reorder_controls)
         except TypeError:
             pass
+        try:
+            self.module_table.itemSelectionChanged.disconnect(self._update_module_remove_control)
+        except TypeError:
+            pass
         self.module_table.itemSelectionChanged.connect(self._update_module_reorder_controls)
+        self.module_table.itemSelectionChanged.connect(self._update_module_remove_control)
         self._update_module_reorder_controls()
+        self._update_module_remove_control()
 
     def _module_setting_changed(self, item):
         if item.column() not in (1, 2):
@@ -657,6 +752,20 @@ class ConfigurationDialog(QDialog):
             return None
         item = self.module_table.item(row, 0)
         return item.data(Qt.ItemDataRole.UserRole) if item else None
+
+    def _update_module_remove_control(self):
+        if not hasattr(self, "remove_module_btn"):
+            return
+        module_id = self.selected_module_id()
+        manifest = self.module_registry.manifests.get(module_id) if module_id else None
+        removable = bool(manifest and manifest.removable)
+        self.remove_module_btn.setEnabled(removable)
+        if manifest is None:
+            self.remove_module_btn.setToolTip("Select a user/portable Hub Module to remove.")
+        elif removable:
+            self.remove_module_btn.setToolTip("Remove this module from the writable module store.")
+        else:
+            self.remove_module_btn.setToolTip("System-installed Hub Modules are managed by DNF.")
 
     def _module_dashboard_reorderable(self, module_id):
         if module_id not in self.module_registry.manifests:
@@ -717,8 +826,8 @@ class ConfigurationDialog(QDialog):
             return
         trust = QMessageBox.question(
             self,
-            "Add Suite Module",
-            "Suite Modules contain executable Python code that runs inside the LinSpectacles host when enabled. "
+            "Add Hub Module",
+            "Hub Modules contain executable Python code that runs inside the LinSpectacles host when enabled. "
             "Only add a module you trust. Newly added modules remain disabled until you explicitly enable them.\n\n"
             "Continue with this archive?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
@@ -739,7 +848,7 @@ class ConfigurationDialog(QDialog):
             self.changed = True
             self.refresh_modules()
         except Exception as exc:
-            QMessageBox.critical(self, "Add Suite Module", str(exc))
+            QMessageBox.critical(self, "Add Hub Module", str(exc))
 
     def remove_module(self):
         module_id = self.selected_module_id()
@@ -748,10 +857,19 @@ class ConfigurationDialog(QDialog):
         manifest = self.module_registry.manifests.get(module_id)
         if not manifest:
             return
+        if not manifest.removable:
+            QMessageBox.information(
+                self,
+                "Remove Hub Module",
+                f"'{manifest.name}' is system-installed and is managed by DNF. "
+                "LinSpectacles will not delete RPM-owned module files.",
+            )
+            return
+        location = "portable" if manifest.source == "Portable" else "user"
         answer = QMessageBox.question(
             self,
-            "Remove Suite Module",
-            f"Remove '{manifest.name}' from this portable LinSpectacles copy?\n\n"
+            "Remove Hub Module",
+            f"Remove '{manifest.name}' from the {location} LinSpectacles module store?\n\n"
             "Its module folder will be deleted. Any active contribution is removed when Configuration closes.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
@@ -766,16 +884,17 @@ class ConfigurationDialog(QDialog):
             self.changed = True
             self.refresh_modules()
         except Exception as exc:
-            QMessageBox.critical(self, "Remove Suite Module", str(exc))
+            QMessageBox.critical(self, "Remove Hub Module", str(exc))
 
 
 class AboutDialog(QDialog):
     """Pad-family style retained, modeless About dialog."""
 
-    def __init__(self, program_root, parent=None):
+    def __init__(self, program_root, parent=None, runtime_paths=None):
         super().__init__(parent)
         self.program_root = Path(program_root).resolve()
-        self.setWindowTitle("About — LinSpectacles")
+        self.runtime_paths = runtime_paths or RuntimePaths.for_program(self.program_root)
+        self.setWindowTitle("About — LinSpectacles Hub")
         self.setMinimumSize(540, 590)
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
 
@@ -800,7 +919,7 @@ class AboutDialog(QDialog):
                 )
         root.addWidget(logo_label, alignment=Qt.AlignmentFlag.AlignHCenter)
 
-        name = QLabel("<h2 style='margin:0'>LinSpectacles</h2>")
+        name = QLabel("<h2 style='margin:0'>LinSpectacles Hub</h2>")
         name.setAlignment(Qt.AlignmentFlag.AlignCenter)
         root.addWidget(name)
 
@@ -825,11 +944,11 @@ class AboutDialog(QDialog):
         root.addWidget(description)
 
         details = QLabel(
-            "<b>Build:</b> Modular portable source<br>"
+            f"<b>Build:</b> {self.runtime_paths.build_label}<br>"
             "<b>Organisation ID:</b> "
             f"<a href='{ORGANIZATION_URL}'>{ORGANIZATION_ID}</a><br>"
             "<b>Configuration:</b><br>"
-            f"{self.program_root / 'config' / 'linspectacles.json'}"
+            f"{self.runtime_paths.config_file}"
         )
         details.setWordWrap(True)
         details.setTextInteractionFlags(
@@ -868,6 +987,8 @@ class Linspectacles(QMainWindow):
     def __init__(self, program_root):
         super().__init__()
         self.program_root = Path(program_root).resolve()
+        self.runtime_paths = RuntimePaths.for_program(self.program_root)
+        self.runtime_paths.ensure_mutable_dirs()
         self.setWindowTitle(APP_NAME)
         self.resize(1350, 900)
         self._about_dialog = None
@@ -876,14 +997,23 @@ class Linspectacles(QMainWindow):
         if icon_path.is_file():
             self.setWindowIcon(QIcon(str(icon_path)))
 
-        self.config = PortableConfig(self.program_root)
-        self.registry = AppletRegistry(self.program_root)
+        self.config = PortableConfig(self.program_root, self.runtime_paths.config_file)
+        self.registry = AppletRegistry(
+            self.program_root,
+            self.runtime_paths.applet_store,
+            self.runtime_paths.system_applet_store,
+        )
         self.registry.discover()
-        self.module_registry = ModuleRegistry(self.program_root)
+        self.module_registry = ModuleRegistry(
+            self.program_root,
+            self.runtime_paths.module_store,
+            self.runtime_paths.system_module_store,
+        )
         self.module_registry.discover()
         self.module_events = EventBus()
         self.module_contexts = {}
         self.active_modules = {}
+        self.active_module_directories = {}
         self.module_configuration_pages = []
         self.module_suite_state_items = []
         self.module_coverage_annotations = []
@@ -894,6 +1024,7 @@ class Linspectacles(QMainWindow):
         self.navigation_provider = None
         self.navigation_provider_module_id = None
         self.pages = {}
+        self.loaded_applet_directories = {}
         self.manifest_by_id = {}
 
         central = QWidget()
@@ -916,7 +1047,7 @@ class Linspectacles(QMainWindow):
             self.initialize_enabled_applets()
 
     def setup_menu(self):
-        # Suite-level applet cycling deliberately skips Dashboard.  The comma
+        # Hub-level applet cycling deliberately skips Dashboard.  The comma
         # and period bindings are laptop-friendly and follow the visible
         # sidebar order, wrapping at either end.
         self.previous_applet_action = QAction("Previous Applet", self)
@@ -945,7 +1076,7 @@ class Linspectacles(QMainWindow):
         documentation_action.triggered.connect(self.open_documentation)
         self.help_menu.addAction(documentation_action)
 
-        # Enabled Suite Modules may add actions to this reserved Help section.
+        # Enabled Hub Modules may add actions to this reserved Help section.
         # The following separator remains the stable boundary before repository
         # and issue-reporting links.
         self.help_links_separator = self.help_menu.addSeparator()
@@ -968,12 +1099,12 @@ class Linspectacles(QMainWindow):
 
         self.help_menu.addSeparator()
 
-        about_action = QAction("About LinSpectacles", self)
+        about_action = QAction("About LinSpectacles Hub", self)
         about_action.triggered.connect(self.open_about)
         self.help_menu.addAction(about_action)
 
         # Tools is an extension point, not a permanent empty menu.  It becomes
-        # visible only while at least one enabled Suite Module contributes an
+        # visible only while at least one enabled Hub Module contributes an
         # action.  It is inserted before Help for conventional menu ordering.
         self.tools_menu = QMenu("Tools", self)
         self.menuBar().insertMenu(self.help_menu.menuAction(), self.tools_menu)
@@ -995,7 +1126,7 @@ class Linspectacles(QMainWindow):
             self._about_dialog.activateWindow()
             return
 
-        dialog = AboutDialog(self.program_root, self)
+        dialog = AboutDialog(self.program_root, self, self.runtime_paths)
         self._about_dialog = dialog
         dialog.destroyed.connect(lambda *_: setattr(self, "_about_dialog", None))
         dialog.show()
@@ -1038,10 +1169,17 @@ class Linspectacles(QMainWindow):
             """
         )
         self.nav_list.currentItemChanged.connect(self.switch_view)
+        self.nav_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.nav_list.customContextMenuRequested.connect(self._show_applet_context_menu)
         # The navigation list owns the expandable vertical area.  Keep the
         # management controls pinned beneath it instead of letting a spacer
         # consume the sidebar and force the list down to its size hint.
         layout.addWidget(self.nav_list, 1)
+
+        self.launch_standalone_btn = QPushButton("Launch Standalone...")
+        self.launch_standalone_btn.setVisible(False)
+        self.launch_standalone_btn.clicked.connect(self.launch_current_applet_standalone)
+        layout.addWidget(self.launch_standalone_btn)
 
         config = QPushButton("Configuration...")
         config.clicked.connect(lambda: self.open_configuration())
@@ -1134,7 +1272,7 @@ class Linspectacles(QMainWindow):
         header.addLayout(brand, 1)
         layout.addLayout(header)
 
-        # Quiet extension point for enabled Suite Modules. Dashboard visibility
+        # Quiet extension point for enabled Hub Modules. Dashboard visibility
         # is a host preference independent of module activation. The container
         # remains invisible when no visible module contributes a widget.
         self.dashboard_module_container = QWidget()
@@ -1166,6 +1304,17 @@ class Linspectacles(QMainWindow):
         coverage_note.setStyleSheet("color:#b8b8b8;")
         coverage_layout.addWidget(coverage_note)
 
+        coverage_filters = QHBoxLayout()
+        coverage_filters.setSpacing(14)
+        self.coverage_enabled_only = QCheckBox("Enabled Only")
+        self.coverage_loaded_only = QCheckBox("Loaded Only")
+        self.coverage_enabled_only.toggled.connect(self.update_dashboard)
+        self.coverage_loaded_only.toggled.connect(self.update_dashboard)
+        coverage_filters.addWidget(self.coverage_enabled_only)
+        coverage_filters.addWidget(self.coverage_loaded_only)
+        coverage_filters.addStretch(1)
+        coverage_layout.addLayout(coverage_filters)
+
         self.dashboard_coverage = QTableWidget(0, 4)
         self.dashboard_coverage.setHorizontalHeaderLabels(["Applet", "Version", "Availability", "Session"])
         self.dashboard_coverage.verticalHeader().setVisible(False)
@@ -1182,7 +1331,7 @@ class Linspectacles(QMainWindow):
         state_layout = QVBoxLayout(state_card)
         state_layout.setContentsMargins(16, 14, 16, 14)
         state_layout.setSpacing(9)
-        state_heading = QLabel("Suite State")
+        state_heading = QLabel("Hub State")
         state_heading_font = state_heading.font()
         state_heading_font.setBold(True)
         state_heading.setFont(state_heading_font)
@@ -1236,6 +1385,18 @@ class Linspectacles(QMainWindow):
 
         manifests = sorted(self.registry.manifests.values(), key=lambda m: (m.name.casefold(), m.applet_id))
         disabled = set(self.config.disabled_applets)
+        enabled_only = bool(
+            hasattr(self, "coverage_enabled_only") and self.coverage_enabled_only.isChecked()
+        )
+        loaded_only = bool(
+            hasattr(self, "coverage_loaded_only") and self.coverage_loaded_only.isChecked()
+        )
+        visible_manifests = [
+            manifest
+            for manifest in manifests
+            if (not enabled_only or manifest.applet_id not in disabled)
+            and (not loaded_only or manifest.applet_id in self.pages)
+        ]
         coverage_columns = self._ordered_dashboard_contributions(self.module_coverage_columns)
         annotation_providers = self._ordered_dashboard_contributions(self.module_coverage_annotations)
         headers = ["Applet", "Version", "Availability", "Session"]
@@ -1246,9 +1407,9 @@ class Linspectacles(QMainWindow):
             headers.append("Summary")
         self.dashboard_coverage.setColumnCount(len(headers))
         self.dashboard_coverage.setHorizontalHeaderLabels(headers)
-        self.dashboard_coverage.setRowCount(len(manifests))
+        self.dashboard_coverage.setRowCount(len(visible_manifests))
 
-        for row, manifest in enumerate(manifests):
+        for row, manifest in enumerate(visible_manifests):
             enabled = manifest.applet_id not in disabled
             loaded = manifest.applet_id in self.pages
             record = {
@@ -1310,7 +1471,7 @@ class Linspectacles(QMainWindow):
             if self.config.module_enabled(manifest.module_id, manifest.enabled_by_default)
         )
         self.dashboard_modules_status.setText(
-            f"Suite modules: {module_enabled_count} enabled / {len(module_manifests)} installed"
+            f"Hub modules: {module_enabled_count} enabled / {len(module_manifests)} installed"
         )
 
         while self.dashboard_module_state_layout.count():
@@ -1330,7 +1491,7 @@ class Linspectacles(QMainWindow):
             self.dashboard_module_state_layout.addWidget(line)
 
     # ------------------------------------------------------------------
-    # Suite Module API host services
+    # Hub Module API host services
     # ------------------------------------------------------------------
     def _add_module_menu_action(self, module_id, menu_id, text, callback, shortcut=None):
         action = QAction(text, self)
@@ -1346,7 +1507,7 @@ class Linspectacles(QMainWindow):
             self.tools_menu.menuAction().setVisible(True)
         else:
             action.deleteLater()
-            raise ValueError("Unsupported Suite Module menu")
+            raise ValueError("Unsupported Hub Module menu")
         return action
 
     def _remove_module_menu_action(self, action):
@@ -1483,6 +1644,8 @@ class Linspectacles(QMainWindow):
                 "version": manifest.version,
                 "enabled": manifest.applet_id not in disabled,
                 "loaded": manifest.applet_id in self.pages,
+                "source": manifest.source,
+                "removable": manifest.removable,
             }
             for manifest in self.registry.ordered()
         ]
@@ -1516,6 +1679,8 @@ class Linspectacles(QMainWindow):
                     "enabled": manifest.applet_id not in disabled,
                     "loaded": manifest.applet_id in self.pages,
                     "directory": str(manifest.directory),
+                    "source": manifest.source,
+                    "removable": manifest.removable,
                     "manifest": raw,
                 }
             )
@@ -1555,6 +1720,7 @@ class Linspectacles(QMainWindow):
             set_navigation_provider=self._set_navigation_provider,
             remove_navigation_provider=self._remove_navigation_provider,
             refresh_navigation=self._refresh_navigation,
+            storage_root=self.runtime_paths.module_storage_root,
         )
 
     def _module_module_states(self):
@@ -1567,6 +1733,8 @@ class Linspectacles(QMainWindow):
                 "version": manifest.version,
                 "enabled": self.config.module_enabled(manifest.module_id, manifest.enabled_by_default),
                 "dashboard_visible": self.config.module_dashboard_visible(manifest.module_id, True),
+                "source": manifest.source,
+                "removable": manifest.removable,
             })
         return records
 
@@ -1590,7 +1758,7 @@ class Linspectacles(QMainWindow):
 
     def _set_navigation_provider(self, module_id, provider):
         if self.navigation_provider is not None and self.navigation_provider_module_id != str(module_id):
-            raise RuntimeError("Only one Suite Module may organize applet navigation at a time.")
+            raise RuntimeError("Only one Hub Module may organize applet navigation at a time.")
         if not callable(provider):
             raise TypeError("navigation provider must be callable")
         self.navigation_provider_module_id = str(module_id)
@@ -1627,10 +1795,79 @@ class Linspectacles(QMainWindow):
         self.nav_list.setCurrentRow(-1)
         self.nav_list.blockSignals(False)
         self.dashboard_btn.setChecked(True)
+        self._update_launch_standalone_control(None)
         self.update_dashboard()
         self.stack.setCurrentWidget(self.pages[DASHBOARD_ID])
         self.status_lbl.setText("Status: Active View: Dashboard")
         self.module_events.emit("selection.changed", applet_id=None, label="Dashboard")
+
+    def _update_launch_standalone_control(self, applet_id=None):
+        if not hasattr(self, "launch_standalone_btn"):
+            return
+        visible = bool(applet_id and applet_id in self.manifest_by_id)
+        self.launch_standalone_btn.setVisible(visible)
+        self.launch_standalone_btn.setEnabled(visible)
+
+    def _active_applet_id(self):
+        if not hasattr(self, "stack"):
+            return None
+        current_widget = self.stack.currentWidget()
+        for applet_id, widget in self.pages.items():
+            if applet_id != DASHBOARD_ID and widget is current_widget:
+                return applet_id
+        return None
+
+    def launch_current_applet_standalone(self):
+        applet_id = self._active_applet_id()
+        if applet_id:
+            self.launch_applet_standalone(applet_id)
+
+    def launch_applet_standalone(self, applet_id):
+        manifest = self.registry.manifests.get(str(applet_id))
+        if manifest is None:
+            QMessageBox.warning(self, "Launch Standalone", "This applet is no longer installed.")
+            return
+        launcher = (manifest.directory / manifest.standalone).resolve()
+        try:
+            launcher.relative_to(manifest.directory.resolve())
+        except ValueError:
+            QMessageBox.critical(self, "Launch Standalone", "The applet standalone launcher path is invalid.")
+            return
+        if not launcher.is_file():
+            QMessageBox.critical(
+                self,
+                "Launch Standalone",
+                f"Could not find the standalone launcher for {manifest.name}:\n{launcher}",
+            )
+            return
+        try:
+            started, _pid = QProcess.startDetached(
+                sys.executable, [str(launcher)], str(manifest.directory)
+            )
+        except Exception as exc:
+            QMessageBox.critical(
+                self, "Launch Standalone", f"Could not launch {manifest.name}:\n{exc}"
+            )
+            return
+        if not started:
+            QMessageBox.critical(
+                self, "Launch Standalone", f"Could not launch {manifest.name}."
+            )
+            return
+        self.status_lbl.setText(f"Status: Launched standalone: {manifest.name}")
+
+    def _show_applet_context_menu(self, position):
+        item = self.nav_list.itemAt(position)
+        if item is None:
+            return
+        applet_id = item.data(Qt.ItemDataRole.UserRole)
+        if not applet_id or applet_id not in self.manifest_by_id:
+            return
+        menu = QMenu(self.nav_list)
+        launch_action = menu.addAction("Launch Standalone...")
+        chosen = menu.exec(self.nav_list.viewport().mapToGlobal(position))
+        if chosen is launch_action:
+            self.launch_applet_standalone(applet_id)
 
     def _deactivate_suite_module(self, module_id):
         instance = self.active_modules.pop(module_id, None)
@@ -1642,11 +1879,12 @@ class Linspectacles(QMainWindow):
                     handler()
                 except Exception as exc:
                     self.status_lbl.setText(
-                        f"Status: Suite Module cleanup warning ({module_id}): {exc}"
+                        f"Status: Hub Module cleanup warning ({module_id}): {exc}"
                     )
         if context is not None:
             context.cleanup()
         self.module_registry.unload(module_id)
+        self.active_module_directories.pop(module_id, None)
         self.module_events.emit("module.deactivated", module_id=module_id)
 
     def sync_suite_modules(self, show_errors=True):
@@ -1666,7 +1904,13 @@ class Linspectacles(QMainWindow):
         }
 
         for module_id in list(self.active_modules):
-            if module_id not in desired or module_id not in manifests:
+            manifest = manifests.get(module_id)
+            active_directory = self.active_module_directories.get(module_id)
+            if (
+                module_id not in desired
+                or manifest is None
+                or (active_directory is not None and active_directory != manifest.directory)
+            ):
                 self._deactivate_suite_module(module_id)
 
         failures = []
@@ -1687,6 +1931,7 @@ class Linspectacles(QMainWindow):
                 continue
             self.module_contexts[module_id] = context
             self.active_modules[module_id] = instance
+            self.active_module_directories[module_id] = manifest.directory
             self.module_events.emit(
                 "module.activated", module_id=module_id, name=manifest.name
             )
@@ -1708,10 +1953,10 @@ class Linspectacles(QMainWindow):
         )
 
         if failures:
-            message = "Could not activate one or more Suite Modules:\n\n" + "\n".join(failures)
-            self.status_lbl.setText("Status: One or more Suite Modules failed to activate.")
+            message = "Could not activate one or more Hub Modules:\n\n" + "\n".join(failures)
+            self.status_lbl.setText("Status: One or more Hub Modules failed to activate.")
             if show_errors:
-                QMessageBox.warning(self, "Suite Module", message)
+                QMessageBox.warning(self, "Hub Module", message)
 
     def closeEvent(self, event):
         for module_id in list(self.active_modules):
@@ -1824,6 +2069,8 @@ class Linspectacles(QMainWindow):
             if self.pages.get(DASHBOARD_ID) is not None:
                 self.stack.setCurrentWidget(self.pages[DASHBOARD_ID])
 
+        self._update_launch_standalone_control(self._active_applet_id())
+
         if rediscover:
             self._unload_disabled_or_removed()
             self.update_dashboard()
@@ -1860,12 +2107,30 @@ class Linspectacles(QMainWindow):
     def _unload_disabled_or_removed(self):
         keep = set(self.manifest_by_id) | {DASHBOARD_ID}
         for applet_id in list(self.pages):
-            if applet_id in keep:
+            manifest = self.manifest_by_id.get(applet_id)
+            source_changed = bool(
+                applet_id != DASHBOARD_ID
+                and manifest is not None
+                and self.loaded_applet_directories.get(applet_id) != manifest.directory
+            )
+            if applet_id in keep and not source_changed:
                 continue
             widget = self.pages.pop(applet_id)
+            was_current = self.stack.currentWidget() is widget
             self._set_applet_active(widget, False)
             self.stack.removeWidget(widget)
             widget.deleteLater()
+            self.loaded_applet_directories.pop(applet_id, None)
+
+            # A newly installed user copy may shadow an RPM applet with the
+            # same ID. If that applet was active, replace the embedded widget
+            # immediately after Configuration closes rather than requiring a
+            # Hub restart.
+            if source_changed and was_current:
+                replacement = self.ensure_applet(applet_id)
+                if replacement is not None:
+                    self.stack.setCurrentWidget(replacement)
+                    self._set_applet_active(replacement, True)
 
     def current_id(self):
         if hasattr(self, "stack") and self.pages.get(DASHBOARD_ID) is not None:
@@ -1915,6 +2180,7 @@ class Linspectacles(QMainWindow):
             return None
         self.stack.addWidget(widget)
         self.pages[applet_id] = widget
+        self.loaded_applet_directories[applet_id] = manifest.directory
         self._apply_applet_preferences(applet_id, widget)
         self._set_applet_active(widget, False)
         self.module_events.emit(
@@ -1948,6 +2214,7 @@ class Linspectacles(QMainWindow):
             self.dashboard_btn.setChecked(False)
         self.stack.setCurrentWidget(widget)
         self._set_applet_active(widget, True)
+        self._update_launch_standalone_control(applet_id)
         self.status_lbl.setText(f"Status: Active View: {current.text()}")
         self.module_events.emit(
             "selection.changed",
@@ -1984,7 +2251,7 @@ class Linspectacles(QMainWindow):
         )
         dialog.exec()
 
-        # Suite Modules are synchronized before applet-change events are sent,
+        # Hub Modules are synchronized before applet-change events are sent,
         # so disabled/removed modules cannot receive a stale notification and
         # newly enabled modules immediately see the current host state.
         self.sync_suite_modules(show_errors=True)

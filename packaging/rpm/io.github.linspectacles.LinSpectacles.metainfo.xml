@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.linspectacles.LinSpectacles</id>
+  <name>LinSpectacles</name>
+  <summary>Linux Inspection Suite</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <description>
+    <p>LinSpectacles is a modular suite of read-only Linux inspection utilities with independently portable applets.</p>
+    <p>The RPM installs the LinSpectacles Hub application. Applets and Hub Modules may be user-installed or provided as immutable RPM-managed system components.</p>
+  </description>
+  <launchable type="desktop-id">linspectacles.desktop</launchable>
+  <categories>
+    <category>System</category>
+  </categories>
+  <keywords>
+    <keyword>Linux</keyword>
+    <keyword>inspection</keyword>
+    <keyword>system</keyword>
+    <keyword>diagnostics</keyword>
+  </keywords>
+  <url type="homepage">https://github.com/linspectacles/linspectacles-hub</url>
+  <url type="bugtracker">https://github.com/linspectacles/linspectacles-hub/issues</url>
+  <url type="vcs-browser">https://github.com/linspectacles/linspectacles-hub</url>
+  <developer id="io.github.linspectacles">
+    <name>brunonlinespace</name>
+  </developer>
+  <provides>
+    <binary>linspectacles</binary>
+  </provides>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.0.7-r1" date="2026-09-24" type="stable">
+      <description><p>Completes the official offline Hub Module catalogue with Boot Environment and System Identity.</p></description>
+    </release>
+    <release version="0.0.7" date="2026-09-23" type="stable">
+      <description>
+        <p>Adds dual-source applet and Hub Module discovery for RPM installs, with user overrides taking precedence over system-installed components and package-manager ownership respected.</p>
+      </description>
+    </release>
+    <release version="0.0.6-r1" date="2026-09-23" type="stable">
+      <description>
+        <p>Clarifies LinSpectacles Hub identity in About surfaces and removes temporary RPM package-name obsoletion ahead of the finalized package taxonomy.</p>
+      </description>
+    </release>
+    <release version="0.0.6" date="2026-09-23" type="stable">
+      <description>
+        <p>Adopts the LinSpectacles Hub package and repository identity while preserving the visible LinSpectacles application identity, command and user-owned component model.</p>
+      </description>
+    </release>
+    <release version="0.0.5-exp1-r4" date="2026-09-23" type="development">
+      <description>
+        <p>Renames the Fedora/COPR package to linspectacles-suite and adds upgrade compatibility from the former linspectacles package; application runtime behavior is unchanged.</p>
+      </description>
+    </release>
+    <release version="0.0.5-exp1-r3" date="2026-09-23" type="development">
+      <description>
+        <p>Improves RPM and AppStream identity metadata for package and software-center presentation; application runtime behavior is unchanged.</p>
+      </description>
+    </release>
+  </releases>
+</component>

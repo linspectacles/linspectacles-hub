@@ -2,7 +2,7 @@
   "schema": 1,
   "id": "linspectacles",
   "name": "LinSpectacles",
-  "display_name": "LinSpectacles — Linux Inspection Suite",
+  "display_name": "LinSpectacles \u2014 Linux Inspection Suite",
   "family": "extension",
   "author": "brunonlinespace",
   "editor": "brunonlinespace",
@@ -14,10 +14,10 @@
   "entrypoint": "main.py",
   "file_routing": false,
   "new_file": false,
-  "notes": "0.0.3-r2 corrects the LinSpectacles repository URL, keeps the organization link separate, simplifies visible About metadata while retaining full component metadata, and makes Inspection Coverage columns fill the available table width.",
-  "version": "0.0.3-r2",
-  "release_channel": "experimental",
+  "notes": "0.0.7-r1 completes the built-in official Hub Module catalogue by adding Boot Environment and System Identity. Packaged component discovery and runtime behaviour are otherwise unchanged from 0.0.7.",
+  "version": "0.0.7-r1",
+  "release_channel": "stable",
   "organization_id": "linspectacles",
   "organization_url": "https://github.com/linspectacles/",
-  "repository": "https://github.com/linspectacles/linspectacles-suite/"
+  "repository": "https://github.com/linspectacles/linspectacles-hub"
 }

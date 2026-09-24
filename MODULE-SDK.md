@@ -1,22 +1,25 @@
 # LinSpectacles Module SDK — API v5
 
-Suite Modules are optional capabilities of the **LinSpectacles host**. They are deliberately different from applets:
+> **0.0.7 terminology/packaging:** host-only extensions are called **Hub Modules**, and the Dashboard card is **Hub State**. Existing Module API v1-v5 symbol names such as `add_suite_state_item()` are retained unchanged for source compatibility. RPM mode may discover immutable system modules in addition to user modules.
+
+
+Hub Modules are optional capabilities of the **LinSpectacles host**. They are deliberately different from applets:
 
 - **Applet**: a standalone inspector; must remain usable outside LinSpectacles and must not import `linspectacles.*`.
-- **Suite Module**: an optional host enhancement; it may depend on the documented Suite Module API and never appears in the sidebar.
+- **Hub Module**: an optional host enhancement; it may depend on the documented Hub Module API and never appears in the sidebar.
 
-Examples of appropriate Suite Modules include an Encyclopedia/What's This layer, relationship/correlation tools, Snapshot & Compare, combined diagnostic reports, or privacy/redaction helpers.
+Examples of appropriate Hub Modules include an Encyclopedia/What's This layer, relationship/correlation tools, Snapshot & Compare, combined diagnostic reports, or privacy/redaction helpers.
 
 ## Discovery and activation
 
-Suite Modules live in the root-level `modules/` directory. Discovery reads `module.json` only. Python is imported **only when the module is enabled**.
+Hub Modules live in manifest directories. Portable mode uses root-level `modules/`. RPM mode merges the writable user store `${XDG_DATA_HOME:-~/.local/share}/linspectacles/modules/` with the immutable system store `/usr/libexec/linspectacles/modules/`; a valid user module wins when both stores expose the same module ID. Discovery reads `module.json` only. Python is imported **only when the module is enabled**. System-installed modules are package-manager owned and are not deleted by the Hub.
 
-Enabled Suite Modules activate at Suite startup because they contribute host features rather than sidebar views. Disabling/removing a module deactivates it and removes contributions registered through its context.
+Enabled Hub Modules activate at Hub startup because they contribute host features rather than sidebar views. Disabling/removing a module deactivates it and removes contributions registered through its context.
 
 ## Required files
 
 ```text
-modules/my_module/
+<active-module-store>/my_module/
   module.json
   module.py
 ```
@@ -30,7 +33,7 @@ modules/my_module/
   "schema": 1,
   "module_api": 4,
   "id": "my-module",
-  "name": "My Suite Module",
+  "name": "My Hub Module",
   "version": "0.0.1",
   "author": "brunonlinespace",
   "editor": "brunonlinespace",
@@ -90,7 +93,7 @@ context.add_dashboard_widget(widget)
 
 Dashboard contributions occupy a quiet host-owned area above the built-in coverage/state section. The area disappears when empty. A module should not reproduce sidebar navigation there. Their vertical order follows the persistent **Configuration → Modules → Up / Down** order.
 
-Dashboard presentation is controlled by the host independently of module activation. **Configuration → Modules → Dashboard** can hide a module's Dashboard contributions while leaving the enabled module active. This host visibility gate applies to direct Dashboard widgets, Suite State items, Inspection Coverage columns and legacy Summary annotations. Modules do not need to implement their own duplicate show/hide preference for these host surfaces.
+Dashboard presentation is controlled by the host independently of module activation. **Configuration → Modules → Dashboard** can hide a module's Dashboard contributions while leaving the enabled module active. This host visibility gate applies to direct Dashboard widgets, Hub State items, Inspection Coverage columns and legacy Summary annotations. Modules do not need to implement their own duplicate show/hide preference for these host surfaces.
 
 
 ### Configuration and Dashboard host surfaces — API v3/v4
@@ -101,7 +104,7 @@ API v3 lets modules integrate into existing Suite surfaces without obtaining pri
 context.add_configuration_page("helpers", "Helpers", self.create_helpers_page)
 ```
 
-The factory is called when Configuration opens and receives the tab widget as its parent. It must return a `QWidget`. The host owns tab placement and cleanup. A contributed page may optionally expose `can_close_configuration()` returning `True`, `False`, or `(allowed, message)` to block Configuration from closing while an explicit operation is still active.
+The factory is called when Configuration opens and receives the tab widget as its parent. It must return a `QWidget`. The host owns tab placement and cleanup. The official `applet-organizer` contribution is placed before the built-in **Applets** page; other contributed module pages follow **Startup** and precede **Modules**. A contributed page may optionally expose `can_close_configuration()` returning `True`, `False`, or `(allowed, message)` to block Configuration from closing while an explicit operation is still active.
 
 ```python
 context.open_configuration_page("helpers")
@@ -113,13 +116,15 @@ Opens Configuration directly on that module-owned page. This is useful for a Too
 context.add_suite_state_item("Privileged helpers", self.summary_text)
 ```
 
-The provider is called when Dashboard state is refreshed. It returns the compact value appended to the built-in **Suite State** card.
+The provider is called when Dashboard state is refreshed. It returns the compact value appended to the built-in **Hub State** card.
 
 ```python
 context.add_coverage_annotation(self.coverage_annotation)
 ```
 
 API v3 compatibility: the provider receives one host-known applet record (`id`, `name`, `version`, `enabled`, `loaded`) and returns short text for a legacy **Inspection Coverage → Summary** cell. The Summary column is shown only while at least one enabled legacy module contributes an annotation.
+
+The Dashboard's host-owned **Enabled Only** and **Loaded Only** controls filter which applet rows are displayed in Inspection Coverage. They do not change applet enabled/load state and do not alter the Hub State totals. When both are selected, only applets satisfying both conditions are shown.
 
 API v5 adds purpose-specific columns:
 
@@ -158,7 +163,7 @@ directory   resolved applet directory
 manifest    JSON-compatible contents of applet.json
 ```
 
-The host reads the manifest only. It does **not** import the applet, instantiate its widget or trigger any applet scan. This capability is intended for Suite Modules that need to understand applet-declared features such as optional helper contracts, export capabilities or future declarative integrations without crawling private host state.
+The host reads the manifest only. It does **not** import the applet, instantiate its widget or trigger any applet scan. This capability is intended for Hub Modules that need to understand applet-declared features such as optional helper contracts, export capabilities or future declarative integrations without crawling private host state.
 
 ```python
 current = context.current_applet_id()
@@ -166,16 +171,25 @@ current = context.current_applet_id()
 
 Returns the selected applet ID or `None` while Dashboard is selected.
 
-### Portable module storage
+Applet IDs exposed by the host are logical IDs. A manifest declaring the newer `linspectacles-<applet-id>` form is normalized to `<applet-id>`, so modules remain compatible with legacy catalogue/configuration keys. The nested `manifest` field remains the declarative JSON as written by the applet.
+The mistaken `linspector-<applet-id>` prefix from 0.0.3-r3 is rejected rather than exposed as a separate logical applet ID.
+
+### Module storage
 
 ```python
 folder = context.storage_dir
 ```
 
-Each module gets a namespaced portable directory at:
+Each module gets a namespaced writable directory. Portable mode uses:
 
 ```text
 config/modules/<module-id>/
+```
+
+RPM mode uses:
+
+```text
+${XDG_CONFIG_HOME:-~/.config}/linspectacles/modules/<module-id>/
 ```
 
 ### Status
@@ -204,21 +218,21 @@ Exceptions in one event subscriber are isolated so they do not prevent other mod
 
 ## Cleanup
 
-Every menu action, Dashboard widget, Configuration page, Suite State item, Inspection Coverage annotation/column and event subscription registered through `ModuleContext` is tracked by the host and removed automatically when the module is disabled or removed. `deactivate()` is still useful for module-owned timers, dialogs, files or other resources.
+Every menu action, Dashboard widget, Configuration page, Hub State item, Inspection Coverage annotation/column and event subscription registered through `ModuleContext` is tracked by the host and removed automatically when the module is disabled or removed. `deactivate()` is still useful for module-owned timers, dialogs, files or other resources.
 
 ## Configuration and installation
 
-Suite Modules are listed discreetly under **Configuration → Modules**. They never become sidebar items.
+Hub Modules are listed discreetly under **Configuration → Modules**. They never become sidebar items.
 
 Users can:
 
 - enable/disable a module;
 - independently show/hide that module's Dashboard contributions;
 - add a module ZIP;
-- remove a module folder;
+- remove a user/portable module folder (RPM-managed system modules are removed by the package manager);
 - move modules **Up / Down** to persist contribution order;
 - refresh discovery;
-- open the root `modules/` folder.
+- open the writable user/portable module store.
 
 A newly user-installed module is always left **disabled**, even if its manifest says `enabled_by_default: true`. This keeps installation and execution as separate trust decisions.
 

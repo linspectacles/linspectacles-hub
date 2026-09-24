@@ -9,9 +9,13 @@ from pathlib import Path
 
 
 class PortableConfig:
-    def __init__(self, program_root):
+    def __init__(self, program_root, config_path=None):
         self.program_root = Path(program_root).resolve()
-        self.path = self.program_root / "config" / "linspectacles.json"
+        self.path = (
+            Path(config_path).expanduser()
+            if config_path is not None
+            else self.program_root / "config" / "linspectacles.json"
+        )
         self.data = {
             "lazy_load_utilities": True,
             "disabled_applets": [],

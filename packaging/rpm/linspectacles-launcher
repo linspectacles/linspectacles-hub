@@ -1,0 +1,4 @@
+#!/bin/sh
+# LinSpectacles RPM launcher: immutable Hub application, user-owned runtime state.
+export LINSPECTACLES_INSTALL_MODE=rpm
+exec /usr/bin/python3 @LIBEXECDIR@/linspectacles/main.py "$@"

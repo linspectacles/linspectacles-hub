@@ -1,4 +1,4 @@
-"""LinSpectacles portable host package."""
+"""LinSpectacles host package."""
 
 APP_ID = "linspectacles"
 APP_NAME = "LinSpectacles — Linux Inspection Suite"
@@ -7,6 +7,6 @@ AUTHOR = "brunonlinespace"
 EDITOR = "brunonlinespace"
 PUBLISHER = "brunonlinespace"
 ORGANIZATION_URL = "https://github.com/linspectacles/"
-REPOSITORY = "https://github.com/linspectacles/linspectables-suite/"
+REPOSITORY = "https://github.com/linspectacles/linspectacles-hub"
 
-VERSION = "0.0.3-r2"
+VERSION = "0.0.7-r1"

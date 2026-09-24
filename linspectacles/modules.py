@@ -4,10 +4,10 @@
 # Copyright (C) 2026 brunonlinespace
 # GPL-3.0-or-later
 
-"""Generic Suite Module discovery, loading and host-service context.
+"""Generic Hub Module discovery, loading and host-service context.
 
-Suite Modules are deliberately different from applets.  Applets are standalone
-inspectors and must not depend on LinSpectacles.  Suite Modules enhance the host
+Hub Modules are deliberately different from applets.  Applets are standalone
+inspectors and must not depend on LinSpectacles.  Hub Modules enhance the host
 itself and therefore use this small, versioned API.
 
 Discovery is manifest-only: module Python code is imported only when a module
@@ -43,10 +43,12 @@ class SuiteModuleManifest:
     description: str
     enabled_by_default: bool
     module_api: int
+    source: str
+    removable: bool
 
 
 class EventBus:
-    """Small in-process event bus exposed to enabled Suite Modules."""
+    """Small in-process event bus exposed to enabled Hub Modules."""
 
     def __init__(self):
         self._subscribers = {}
@@ -84,7 +86,7 @@ class EventBus:
 
 
 class ModuleContext:
-    """Versioned, deliberately narrow host-services API for one Suite Module.
+    """Versioned, deliberately narrow host-services API for one Hub Module.
 
     The context never exposes the QMainWindow or its private widgets.  Modules
     may contribute actions/cards through generic services, inspect applet state,
@@ -121,9 +123,15 @@ class ModuleContext:
         set_navigation_provider=None,
         remove_navigation_provider=None,
         refresh_navigation=None,
+        storage_root=None,
     ):
         self.module_id = str(module_id)
         self.program_root = Path(program_root).resolve()
+        self._storage_root = (
+            Path(storage_root).expanduser()
+            if storage_root is not None
+            else self.program_root / "config" / "modules"
+        )
         self._event_bus = event_bus
         self._add_menu_action_cb = add_menu_action
         self._remove_menu_action_cb = remove_menu_action
@@ -158,7 +166,7 @@ class ModuleContext:
 
     @property
     def storage_dir(self):
-        path = self.program_root / "config" / "modules" / self.module_id
+        path = self._storage_root / self.module_id
         path.mkdir(parents=True, exist_ok=True)
         return path
 
@@ -210,9 +218,9 @@ class ModuleContext:
         return self._open_configuration_page_cb(self.module_id, str(page_id))
 
     def add_suite_state_item(self, label, provider):
-        """Contribute a compact Suite State line (Module API v3)."""
+        """Contribute a compact Hub State line (Module API v3)."""
         if self._add_suite_state_item_cb is None:
-            raise RuntimeError("This LinSpectacles host does not support Suite State contributions.")
+            raise RuntimeError("This LinSpectacles host does not support Hub State contributions.")
         if not isinstance(label, str) or not label.strip():
             raise ValueError("label must be non-empty")
         if not callable(provider):
@@ -256,7 +264,7 @@ class ModuleContext:
     def get_applet_metadata(self):
         """Return manifest-derived applet metadata without importing applet code.
 
-        Module API v2 adds this read-only capability so Suite Modules can
+        Module API v2 adds this read-only capability so Hub Modules can
         inspect declarative applet capabilities (for example optional helper
         contracts) without crawling the applet store or triggering applet
         loading/scans. Each record includes ordinary identity/state fields,
@@ -278,9 +286,9 @@ class ModuleContext:
         return token
 
     def get_module_states(self):
-        """Return installed Suite Module identity/state without importing disabled modules (API v5)."""
+        """Return installed Hub Module identity/state without importing disabled modules (API v5)."""
         if self._module_states_cb is None:
-            raise RuntimeError("This LinSpectacles host does not expose Suite Module state.")
+            raise RuntimeError("This LinSpectacles host does not expose Hub Module state.")
         return list(self._module_states_cb())
 
     def activate_applet(self, applet_id):
@@ -364,15 +372,32 @@ class ModuleContext:
 
 
 class ModuleRegistry:
-    """Manifest-only discovery and isolated loading for Suite Modules."""
+    """Manifest-only discovery and isolated loading for Hub Modules."""
 
-    def __init__(self, program_root):
+    def __init__(self, program_root, store=None, system_store=None):
         self.program_root = Path(program_root).resolve()
-        self.store = self.program_root / "modules"
+        self.store = (Path(store).expanduser() if store is not None else self.program_root / "modules")
         self.store.mkdir(parents=True, exist_ok=True)
+        self.system_store = (
+            Path(system_store).expanduser()
+            if system_store is not None
+            else None
+        )
         self.manifests = {}
         self.instances = {}
         self._package_names = {}
+
+    def _discovery_stores(self):
+        primary_source = "User" if self.system_store is not None else "Portable"
+        stores = [(self.store, primary_source, True)]
+        if self.system_store is not None:
+            try:
+                same_store = self.system_store.resolve() == self.store.resolve()
+            except OSError:
+                same_store = False
+            if not same_store:
+                stores.append((self.system_store, "System (RPM)", False))
+        return stores
 
     @staticmethod
     def _inside(base, candidate):
@@ -393,55 +418,65 @@ class ModuleRegistry:
 
     def discover(self):
         found = {}
-        for directory in sorted(self.store.iterdir(), key=lambda p: p.name.lower()):
-            if not directory.is_dir() or directory.is_symlink() or directory.name.startswith("_"):
-                continue
-            manifest_path = directory / "module.json"
-            try:
-                raw = json.loads(manifest_path.read_text(encoding="utf-8"))
-            except (FileNotFoundError, json.JSONDecodeError, OSError):
+        for store, source, removable in self._discovery_stores():
+            if not store.is_dir():
                 continue
             try:
-                if raw.get("schema") != MODULE_SCHEMA:
-                    continue
-                module_api = int(raw.get("module_api", 0))
-                if module_api not in SUPPORTED_MODULE_APIS:
-                    continue
-                module_id = str(raw["id"])
-                if not SAFE_ID.match(module_id):
-                    continue
-                entrypoint, entry_path = self._relative_file(
-                    directory, raw.get("entrypoint"), "module.py"
-                )
-                if not entry_path.is_file() or not self._inside(directory, entry_path):
-                    continue
-                factory = str(raw.get("factory", "create_module"))
-                if not factory or not factory.isidentifier():
-                    continue
-                enabled_by_default = raw.get("enabled_by_default", False)
-                if not isinstance(enabled_by_default, bool):
-                    continue
-                manifest = SuiteModuleManifest(
-                    module_id=module_id,
-                    name=str(raw["name"]),
-                    version=str(raw.get("version", "0")),
-                    author=str(raw.get("author", "")),
-                    editor=str(raw.get("editor", raw.get("author", ""))),
-                    directory=directory.resolve(),
-                    entrypoint=entrypoint,
-                    factory=factory,
-                    description=str(raw.get("description", "")),
-                    enabled_by_default=enabled_by_default,
-                    module_api=module_api,
-                )
-            except (KeyError, TypeError, ValueError):
+                directories = sorted(store.iterdir(), key=lambda p: p.name.lower())
+            except OSError:
                 continue
-            if module_id not in found:
-                found[module_id] = manifest
+            for directory in directories:
+                if not directory.is_dir() or directory.is_symlink() or directory.name.startswith("_"):
+                    continue
+                manifest_path = directory / "module.json"
+                try:
+                    raw = json.loads(manifest_path.read_text(encoding="utf-8"))
+                except (FileNotFoundError, json.JSONDecodeError, OSError):
+                    continue
+                try:
+                    if raw.get("schema") != MODULE_SCHEMA:
+                        continue
+                    module_api = int(raw.get("module_api", 0))
+                    if module_api not in SUPPORTED_MODULE_APIS:
+                        continue
+                    module_id = str(raw["id"])
+                    if not SAFE_ID.match(module_id):
+                        continue
+                    entrypoint, entry_path = self._relative_file(
+                        directory, raw.get("entrypoint"), "module.py"
+                    )
+                    if not entry_path.is_file() or not self._inside(directory, entry_path):
+                        continue
+                    factory = str(raw.get("factory", "create_module"))
+                    if not factory or not factory.isidentifier():
+                        continue
+                    enabled_by_default = raw.get("enabled_by_default", False)
+                    if not isinstance(enabled_by_default, bool):
+                        continue
+                    manifest = SuiteModuleManifest(
+                        module_id=module_id,
+                        name=str(raw["name"]),
+                        version=str(raw.get("version", "0")),
+                        author=str(raw.get("author", "")),
+                        editor=str(raw.get("editor", raw.get("author", ""))),
+                        directory=directory.resolve(),
+                        entrypoint=entrypoint,
+                        factory=factory,
+                        description=str(raw.get("description", "")),
+                        enabled_by_default=enabled_by_default,
+                        module_api=module_api,
+                        source=source,
+                        removable=removable,
+                    )
+                except (KeyError, TypeError, ValueError):
+                    continue
+                if module_id not in found:
+                    found[module_id] = manifest
 
-        # Loaded instances are intentionally not discarded here.  The host owns
+        # Loaded instances are intentionally not discarded here. The host owns
         # lifecycle teardown so it can call deactivate() and clean registered
-        # contributions before asking the registry to unload Python modules.
+        # contributions before unloading Python modules. It also handles a
+        # source change for the same ID (user override versus system package).
         self.manifests = found
         return found
 
@@ -522,12 +557,12 @@ class ModuleRegistry:
         if not callable(factory):
             self.unload(manifest.module_id)
             raise AttributeError(
-                f"Suite Module {manifest.name} does not export {manifest.factory}()"
+                f"Hub Module {manifest.name} does not export {manifest.factory}()"
             )
         instance = factory(context=context)
         if instance is None:
             self.unload(manifest.module_id)
-            raise TypeError(f"Suite Module {manifest.name} factory returned None")
+            raise TypeError(f"Hub Module {manifest.name} factory returned None")
         self.instances[manifest.module_id] = instance
         return instance
 
@@ -543,39 +578,39 @@ class ModuleRegistry:
             file_names = [name for name in archive.namelist() if name and not name.endswith("/")]
             paths = [Path(name) for name in file_names]
             if not paths:
-                raise ValueError("Suite Module archive is empty.")
+                raise ValueError("Hub Module archive is empty.")
             roots = {p.parts[0] for p in paths if p.parts}
             if len(roots) != 1:
-                raise ValueError("Suite Module archive must contain one top-level module folder.")
+                raise ValueError("Hub Module archive must contain one top-level module folder.")
             root = next(iter(roots))
             for path in paths:
                 if path.is_absolute() or ".." in path.parts:
-                    raise ValueError("Suite Module archive contains an unsafe path.")
+                    raise ValueError("Hub Module archive contains an unsafe path.")
 
             manifest_name = f"{root}/module.json"
             if manifest_name not in file_names:
-                raise ValueError("Suite Module archive has no module.json manifest.")
+                raise ValueError("Hub Module archive has no module.json manifest.")
             try:
                 raw = json.loads(archive.read(manifest_name).decode("utf-8"))
             except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-                raise ValueError(f"Suite Module manifest is invalid: {exc}") from exc
+                raise ValueError(f"Hub Module manifest is invalid: {exc}") from exc
 
             module_id = str(raw.get("id", ""))
             if raw.get("schema") != MODULE_SCHEMA or not SAFE_ID.match(module_id):
-                raise ValueError("Suite Module manifest is invalid or unsupported.")
+                raise ValueError("Hub Module manifest is invalid or unsupported.")
             if int(raw.get("module_api", 0)) not in SUPPORTED_MODULE_APIS:
                 raise ValueError(
-                    f"Suite Module requires unsupported Module API {raw.get('module_api')!r}."
+                    f"Hub Module requires unsupported Module API {raw.get('module_api')!r}."
                 )
             entrypoint = Path(str(raw.get("entrypoint", "module.py")))
             if entrypoint.is_absolute() or ".." in entrypoint.parts:
-                raise ValueError("Suite Module entrypoint is unsafe.")
+                raise ValueError("Hub Module entrypoint is unsafe.")
             entry_name = str(Path(root) / entrypoint)
             if entry_name not in file_names:
-                raise ValueError("Suite Module archive does not contain its declared entrypoint.")
+                raise ValueError("Hub Module archive does not contain its declared entrypoint.")
             factory = str(raw.get("factory", "create_module"))
             if not factory or not factory.isidentifier():
-                raise ValueError("Suite Module factory name is invalid.")
+                raise ValueError("Hub Module factory name is invalid.")
             if not isinstance(raw.get("enabled_by_default", False), bool):
                 raise ValueError("enabled_by_default must be true or false.")
             return root, module_id
@@ -584,21 +619,25 @@ class ModuleRegistry:
         root, module_id = self.validate_zip(zip_path)
         destination = self.store / root
         if destination.exists():
-            raise FileExistsError(f"Suite Module folder already exists: {destination.name}")
+            raise FileExistsError(f"Hub Module folder already exists: {destination.name}")
         with zipfile.ZipFile(zip_path, "r") as archive:
             archive.extractall(self.store)
         self.discover()
         if module_id not in self.manifests:
             shutil.rmtree(destination, ignore_errors=True)
-            raise ValueError("Installed files did not produce a valid Suite Module.")
+            raise ValueError("Installed files did not produce a valid Hub Module.")
         return self.manifests[module_id]
 
     def remove(self, module_id):
         manifest = self.manifests.get(module_id)
         if manifest is None:
             return False
+        if not manifest.removable:
+            raise ValueError(
+                "System-installed Hub Modules are managed by the package manager and cannot be removed from LinSpectacles."
+            )
         if not self._inside(self.store, manifest.directory):
-            raise ValueError("Refusing to remove a Suite Module outside the module store.")
+            raise ValueError("Refusing to remove a Hub Module outside the writable module store.")
         shutil.rmtree(manifest.directory)
         self.discover()
         return True

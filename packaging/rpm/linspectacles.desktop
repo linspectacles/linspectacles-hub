@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=LinSpectacles
+GenericName=Linux Inspection Suite
+Comment=Inspect Linux system state with modular standalone utilities
+Exec=linspectacles
+Icon=linspectacles
+Terminal=false
+Categories=System;
+Keywords=Linux;System;Inspection;Diagnostics;
+StartupNotify=true
