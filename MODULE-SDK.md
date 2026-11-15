@@ -1,6 +1,6 @@
-# LinSpectacles Module SDK — API v5
+# LinSpectacles Module SDK — API v8
 
-> **0.0.7 terminology/packaging:** host-only extensions are called **Hub Modules**, and the Dashboard card is **Hub State**. Existing Module API v1-v5 symbol names such as `add_suite_state_item()` are retained unchanged for source compatibility. RPM mode may discover immutable system modules in addition to user modules.
+> **0.0.7 terminology/packaging:** host-only extensions are called **Hub Modules**, and the Dashboard card is **Hub State**. Existing Module API v1-v6 symbol names such as `add_suite_state_item()` are retained unchanged for source compatibility. Packaged runtimes may discover immutable Package-managed/system modules in addition to the runtime-owned User store.
 
 
 Hub Modules are optional capabilities of the **LinSpectacles host**. They are deliberately different from applets:
@@ -12,9 +12,9 @@ Examples of appropriate Hub Modules include an Encyclopedia/What's This layer, r
 
 ## Discovery and activation
 
-Hub Modules live in manifest directories. Portable mode uses root-level `modules/`. RPM mode merges the writable user store `${XDG_DATA_HOME:-~/.local/share}/linspectacles/modules/` with the immutable system store `/usr/libexec/linspectacles/modules/`; a valid user module wins when both stores expose the same module ID. Discovery reads `module.json` only. Python is imported **only when the module is enabled**. System-installed modules are package-manager owned and are not deleted by the Hub.
+Hub Modules are discovered from exactly two sources: the runtime-owned **User** location and the known immutable **Package-managed/system** location. Source Portable reads/writes `<Hub>/modules/`; Source Integrated and Packaged read/write `${XDG_DATA_HOME:-~/.local/share}/linspectacles/modules/`. The current managed Fedora provider uses `/usr/libexec/linspectacles/modules/`. No other manual locations are scanned.
 
-Enabled Hub Modules activate at Hub startup because they contribute host features rather than sidebar views. Disabling/removing a module deactivates it and removes contributions registered through its context.
+If both sources contain the same logical module ID, both physical copies remain visible in **Configuration → Modules**, but enablement belongs to the logical module ID only. The global **User / Package-managed** preference selects which installed implementation runs; versions are never compared and both implementations are never loaded simultaneously. Discovery reads `module.json` only. Python is imported **only for the resolved implementation of an enabled logical module**. Package-managed modules remain package-provider owned and are not deleted by the Hub.
 
 ## Required files
 
@@ -31,7 +31,7 @@ Enabled Hub Modules activate at Hub startup because they contribute host feature
 ```json
 {
   "schema": 1,
-  "module_api": 4,
+  "module_api": 8,
   "id": "my-module",
   "name": "My Hub Module",
   "version": "0.0.1",
@@ -44,7 +44,7 @@ Enabled Hub Modules activate at Hub startup because they contribute host feature
 }
 ```
 
-The current host provides **Module API 5** and remains backward-compatible with Module API 1, 2, 3 and 4 modules. Modules that only need earlier services may keep their existing API declaration. New modules that contribute named Inspection Coverage columns should declare `"module_api": 4`.
+The current host provides **Module API 8** and remains backward-compatible with earlier Module API modules. Modules that only need earlier services may keep their existing API declaration. Modules that use contextual sidebar actions must declare `"module_api": 8`; Applets-table columns/actions remain API 7 services.
 
 ## Factory and lifecycle
 
@@ -67,23 +67,26 @@ def deactivate(self):
 
 The host calls `activate()` after construction and `deactivate()` before unloading when present.
 
-## ModuleContext — API v5
+## ModuleContext — API v8
 
 The context is intentionally narrow. It does **not** expose the `QMainWindow`, sidebar, or private host widgets.
 
-### Menus
+### Contextual actions — API v8
+
+Hub 0.2.0 has no visible Help or Tools menu. A module that needs a compact action for the currently active applet may contribute it immediately above **Launch Standalone...**:
 
 ```python
-context.add_menu_action("help", "Encyclopedia", self.open_encyclopedia)
-context.add_menu_action("tools", "Snapshot & Compare...", self.open_compare)
+context.add_contextual_action(
+    "whats-this",
+    "What's This?",
+    self.open_whats_this,
+    "Shift+F1",
+)
 ```
 
-Supported menu IDs in API v1/v2/v3/v4/v5 are `help` and `tools`.
+Contextual actions are shown only while an applet is active. The Hub owns the button, placement, shortcut registration and cleanup; the module owns only the callback.
 
-- Help contributions are placed in the reserved section after **Documentation** and before the repository links.
-- **Tools** is hidden when no enabled module contributes an action.
-
-An optional shortcut may be supplied as the fourth argument.
+`context.add_menu_action("help", ...)` and `context.add_menu_action("tools", ...)` remain compatibility shims for pre-0.2.0 modules but no longer create visible menus. The historical Encyclopedia `What's This?` Help contribution is bridged automatically to the contextual-action surface so existing Encyclopedia releases continue to work. New modules should not use the legacy menu API.
 
 ### Dashboard
 
@@ -104,13 +107,50 @@ API v3 lets modules integrate into existing Suite surfaces without obtaining pri
 context.add_configuration_page("helpers", "Helpers", self.create_helpers_page)
 ```
 
-The factory is called when Configuration opens and receives the tab widget as its parent. It must return a `QWidget`. The host owns tab placement and cleanup. The official `applet-organizer` contribution is placed before the built-in **Applets** page; other contributed module pages follow **Startup** and precede **Modules**. A contributed page may optionally expose `can_close_configuration()` returning `True`, `False`, or `(allowed, message)` to block Configuration from closing while an explicit operation is still active.
+The factory is called when Configuration opens and receives the tab widget as its parent. It must return a `QWidget`. The host owns tab placement and cleanup. Contributed module pages follow **Modules** in module order and precede **Runtime**. A contributed page may optionally expose `can_close_configuration()` returning `True`, `False`, or `(allowed, message)` to block Configuration from closing while an explicit operation is still active. Applet-related enhancements should use the API v7 Applets-table columns/actions below rather than creating a competing Organizer/Applets tab or inventory.
 
 ```python
 context.open_configuration_page("helpers")
 ```
 
-Opens Configuration directly on that module-owned page. This is useful for a Tools-menu shortcut.
+Opens Configuration directly on that module-owned page. This is useful for module-owned navigation from Dashboard or another documented host surface.
+
+### Applets-table columns and actions — API v7
+
+API v7 is the preferred integration for applet organizers because it preserves one Hub-owned inventory and selection model. A Module may add compact columns directly to the existing **Configuration → Applets** table:
+
+```python
+context.add_applets_column(
+    "favourite", "Favourite", self.is_favourite, self.set_favourite,
+    kind="check", editable=True,
+)
+context.add_applets_column(
+    "category", "Category", self.category_for, self.set_category,
+    kind="text", editable=self.category_editable,
+)
+```
+
+The value provider receives an applet ID. The change callback receives `(applet_id, value)`. `kind` is `"text"` or `"check"`; `editable` may be a bool or an applet-ID callable. The Hub continues to own the row, selection, search, enablement, source/version/editor fields, ZIP installation, removal and lifecycle.
+
+A Module may also contribute a compact action beside the existing table controls:
+
+```python
+context.add_applets_action("manage-categories", "Manage Categories…", self.manage_categories)
+```
+
+The callback may accept the Configuration dialog as a parent for a module-owned dialog. It must not reach into private Hub widgets.
+
+### Applets-page extensions — API v6
+
+API v6 adds a narrow extension point for optional Modules that enhance applet organization without taking ownership of the Hub's Applets UI:
+
+```python
+context.add_applets_extension("organization", "Organization", self.create_organization_widget)
+```
+
+The factory receives the Hub-owned **Configuration → Applets** page as its parent and must return a `QWidget`. The Hub retains applet discovery, search, enablement, ZIP/drag-and-drop installation, removal and runtime/source presentation. The extension is placed inside the existing Applets page and is cleaned up automatically when the Module is disabled.
+
+This is intentionally different from `add_configuration_page()`: an applet organizer should enhance the canonical Applets surface rather than create a second applet-management destination.
 
 ```python
 context.add_suite_state_item("Privileged helpers", self.summary_text)
@@ -180,13 +220,13 @@ The mistaken `linspector-<applet-id>` prefix from 0.0.3-r3 is rejected rather th
 folder = context.storage_dir
 ```
 
-Each module gets a namespaced writable directory. Portable mode uses:
+Each module gets a namespaced writable directory. **Source — Portable** uses:
 
 ```text
 config/modules/<module-id>/
 ```
 
-RPM mode uses:
+**Source — Integrated** and **Packaged** runtimes use:
 
 ```text
 ${XDG_CONFIG_HOME:-~/.config}/linspectacles/modules/<module-id>/
@@ -204,7 +244,7 @@ context.set_status("Snapshot saved.")
 context.subscribe("selection.changed", self.on_selection)
 ```
 
-API v5 currently emits:
+API v7 currently emits:
 
 - `selection.changed` — `applet_id`, `label`
 - `applet.loaded` — `applet_id`, `name`, `version`
@@ -218,7 +258,7 @@ Exceptions in one event subscriber are isolated so they do not prevent other mod
 
 ## Cleanup
 
-Every menu action, Dashboard widget, Configuration page, Hub State item, Inspection Coverage annotation/column and event subscription registered through `ModuleContext` is tracked by the host and removed automatically when the module is disabled or removed. `deactivate()` is still useful for module-owned timers, dialogs, files or other resources.
+Every menu action, Dashboard widget, Configuration page, Applets-table column/action, Applets-page extension, Hub State item, Inspection Coverage annotation/column and event subscription registered through `ModuleContext` is tracked by the host and removed automatically when the module is disabled or removed. `deactivate()` is still useful for module-owned timers, dialogs, files or other resources.
 
 ## Configuration and installation
 
@@ -229,10 +269,10 @@ Users can:
 - enable/disable a module;
 - independently show/hide that module's Dashboard contributions;
 - add a module ZIP;
-- remove a user/portable module folder (RPM-managed system modules are removed by the package manager);
+- remove a module from the runtime-owned User store (Package-managed modules are removed by their package provider);
 - move modules **Up / Down** to persist contribution order;
 - refresh discovery;
-- open the writable user/portable module store.
+- open the writable runtime-owned User module store.
 
 A newly user-installed module is always left **disabled**, even if its manifest says `enabled_by_default: true`. This keeps installation and execution as separate trust decisions.
 
@@ -240,7 +280,7 @@ ZIP installation requires one top-level module folder, safe archive paths, a val
 
 ## Compatibility rule
 
-A new module that uses already-documented API v1/v2/v3/v4/v5 services should require **no LinSpectacles source change**. A host change is appropriate only when a future module genuinely requires a new class of host capability; that capability should then be added generically and the Module API version handled deliberately rather than special-casing a module by name.
+A new module that uses already-documented API v1–v7 services should require **no LinSpectacles source change**. A host change is appropriate only when a future module genuinely requires a new class of host capability; that capability should then be added generically and the Module API version handled deliberately rather than special-casing a module by name.
 
 ## Navigation services — API v5
 

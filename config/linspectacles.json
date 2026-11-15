@@ -5,5 +5,6 @@
   "hidden_columns": {},
   "module_states": {},
   "module_dashboard_visibility": {},
-  "module_order": []
+  "module_order": [],
+  "preferred_component_source": "manual"
 }

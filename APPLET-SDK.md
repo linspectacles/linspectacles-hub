@@ -1,6 +1,7 @@
 # LinSpectacles Applet SDK
 
-LinSpectacles discovers applets from manifest directories. Portable mode uses the root-level `applets/` directory. RPM mode merges the writable user store `${XDG_DATA_HOME:-~/.local/share}/linspectacles/applets/` with the immutable system store `/usr/libexec/linspectacles/applets/`; a valid user applet wins when both stores expose the same logical applet ID. Discovery reads `applet.json` only; Python code is not imported until an enabled applet is opened, unless lazy loading is disabled. System-installed applets are package-manager owned and are not deleted by the Hub.
+LinSpectacles discovers applets from exactly two filesystem sources: the runtime-owned **User** location and the known immutable **Package-managed/system** location. Source Portable reads/writes `<Hub>/applets/`; Source Integrated and Packaged read/write `${XDG_DATA_HOME:-~/.local/share}/linspectacles/applets/`. The current managed Fedora provider uses `/usr/libexec/linspectacles/applets/`. If both sources expose the same logical applet ID, both copies remain visible in Configuration and keep independent source-qualified runtime identities. Ordinary Hub navigation presents the enabled copy selected by the global User/Package-managed preference; if only one enabled copy remains, that copy is presented. Versions are never compared. Add/Remove/Open Folder affect only the runtime-owned User source. Discovery reads `applet.json` only; Python code is not imported until an enabled applet copy is opened, unless lazy loading is disabled.
+
 
 ## Identity
 
@@ -68,7 +69,11 @@ Applets that perform potentially expensive or policy-sensitive probes may presen
 
 Every LinSpectacles applet is standalone-capable and declares its launcher through the manifest `standalone` field (normally `standalone.py`). Run that file with Python to launch only that utility. The applet owns its dependencies and any local settings it needs.
 
-When an applet is active in the Suite, the host exposes **Launch Standalone...** above **Configuration...** and in the applet sidebar context menu. This starts a separate standalone process/window from the declared launcher; it does not detach, re-parent or transfer the currently embedded applet instance.
+When an applet is active in the Hub, the host exposes **Launch Standalone...** above **Configuration...** and in the applet sidebar context menu. `F5` invokes the same standalone launch action. This starts a separate standalone process/window from the declared launcher; it does not detach, re-parent or transfer the currently embedded applet instance.
+
+### Native file/folder choosers
+
+Applet file and folder selection should use the platform-native chooser where available so Hub styling does not leak into the dialog. The current Path Inspector convention uses the static `QFileDialog` helpers without parenting the chooser into the embedded applet widget tree, for example `QFileDialog.getOpenFileName(None, ...)` and `QFileDialog.getExistingDirectory(None, ...)`. The applet remains responsible for its own selected path and validation.
 
 ## Adding and removing
 

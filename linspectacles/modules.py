@@ -25,8 +25,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 MODULE_SCHEMA = 1
-MODULE_API_VERSION = 5
-SUPPORTED_MODULE_APIS = {1, 2, 3, 4, 5}
+MODULE_API_VERSION = 8
+SUPPORTED_MODULE_APIS = {1, 2, 3, 4, 5, 6, 7, 8}
 SAFE_ID = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
 
 
@@ -44,7 +44,13 @@ class SuiteModuleManifest:
     enabled_by_default: bool
     module_api: int
     source: str
+    source_key: str
+    origin: str
     removable: bool
+
+    @property
+    def instance_id(self):
+        return f"{self.source_key}:{self.module_id}"
 
 
 class EventBus:
@@ -109,9 +115,17 @@ class ModuleContext:
         applet_metadata,
         current_applet_id,
         set_status,
+        add_contextual_action=None,
+        remove_contextual_action=None,
         add_configuration_page=None,
         remove_configuration_page=None,
         open_configuration_page=None,
+        add_applets_extension=None,
+        remove_applets_extension=None,
+        add_applets_column=None,
+        remove_applets_column=None,
+        add_applets_action=None,
+        remove_applets_action=None,
         add_suite_state_item=None,
         remove_suite_state_item=None,
         add_coverage_annotation=None,
@@ -136,6 +150,8 @@ class ModuleContext:
         self._add_menu_action_cb = add_menu_action
         self._remove_menu_action_cb = remove_menu_action
         self._add_dashboard_widget_cb = add_dashboard_widget
+        self._add_contextual_action_cb = add_contextual_action
+        self._remove_contextual_action_cb = remove_contextual_action
         self._remove_dashboard_widget_cb = remove_dashboard_widget
         self._applet_states_cb = applet_states
         self._applet_metadata_cb = applet_metadata
@@ -144,6 +160,12 @@ class ModuleContext:
         self._add_configuration_page_cb = add_configuration_page
         self._remove_configuration_page_cb = remove_configuration_page
         self._open_configuration_page_cb = open_configuration_page
+        self._add_applets_extension_cb = add_applets_extension
+        self._remove_applets_extension_cb = remove_applets_extension
+        self._add_applets_column_cb = add_applets_column
+        self._remove_applets_column_cb = remove_applets_column
+        self._add_applets_action_cb = add_applets_action
+        self._remove_applets_action_cb = remove_applets_action
         self._add_suite_state_item_cb = add_suite_state_item
         self._remove_suite_state_item_cb = remove_suite_state_item
         self._add_coverage_annotation_cb = add_coverage_annotation
@@ -158,7 +180,11 @@ class ModuleContext:
         self._navigation_handles = []
         self._menu_handles = []
         self._dashboard_handles = []
+        self._contextual_action_handles = []
         self._configuration_handles = []
+        self._applets_extension_handles = []
+        self._applets_column_handles = []
+        self._applets_action_handles = []
         self._suite_state_handles = []
         self._coverage_handles = []
         self._coverage_column_handles = []
@@ -173,8 +199,8 @@ class ModuleContext:
     def add_menu_action(self, menu, text, callback, shortcut=None):
         """Add an action to a documented host menu section.
 
-        ``menu`` is currently ``"help"`` or ``"tools"``.  The host owns
-        placement and cleanup; the module owns only its label/callback.
+        ``help`` / ``tools`` are retained only for pre-0.2.0 compatibility.
+        New modules should use contextual actions, Dashboard or Configuration.
         """
         if menu not in {"help", "tools"}:
             raise ValueError("menu must be 'help' or 'tools'")
@@ -186,6 +212,26 @@ class ModuleContext:
             self.module_id, menu, text.strip(), callback, shortcut
         )
         self._menu_handles.append(handle)
+        return handle
+
+    def add_contextual_action(self, action_id, text, callback, shortcut=None):
+        """Contribute a compact contextual action above Launch Standalone.
+
+        Contextual actions are shown only while an applet is active.  The host
+        owns placement and lifecycle; the module owns the callback.
+        """
+        if self._add_contextual_action_cb is None:
+            raise RuntimeError("This LinSpectacles host does not support contextual actions.")
+        action_id = str(action_id or "").strip()
+        text = str(text or "").strip()
+        if not action_id or not text:
+            raise ValueError("action_id and text must be non-empty")
+        if not callable(callback):
+            raise TypeError("callback must be callable")
+        handle = self._add_contextual_action_cb(
+            self.module_id, action_id, text, callback, shortcut
+        )
+        self._contextual_action_handles.append(handle)
         return handle
 
     def add_dashboard_widget(self, widget, stretch=0):
@@ -216,6 +262,71 @@ class ModuleContext:
         if self._open_configuration_page_cb is None:
             raise RuntimeError("This LinSpectacles host does not support Configuration page navigation.")
         return self._open_configuration_page_cb(self.module_id, str(page_id))
+
+    def add_applets_extension(self, extension_id, label, factory):
+        """Enhance the Hub-owned Configuration → Applets page (Module API v6).
+
+        The host retains ownership of discovery, enablement, installation and
+        removal. The module contributes only a child widget inside that page.
+        """
+        if self._add_applets_extension_cb is None:
+            raise RuntimeError("This LinSpectacles host does not support Applets-page extensions.")
+        extension_id = str(extension_id or "").strip()
+        label = str(label or "").strip()
+        if not extension_id or not label:
+            raise ValueError("extension_id and label must be non-empty")
+        if not callable(factory):
+            raise TypeError("factory must be callable")
+        handle = self._add_applets_extension_cb(self.module_id, extension_id, label, factory)
+        self._applets_extension_handles.append(handle)
+        return handle
+
+    def add_applets_column(
+        self, column_id, label, value_provider, changed_callback=None,
+        kind="text", editable=False,
+    ):
+        """Add one column to the Hub-owned Applets table (Module API v7).
+
+        ``kind`` is ``"text"`` or ``"check"``. ``value_provider`` receives an
+        applet ID. ``changed_callback`` receives ``(applet_id, value)`` when the
+        user edits/toggles the contributed cell. ``editable`` may be a bool or
+        a callable receiving the applet ID.
+        """
+        if self._add_applets_column_cb is None:
+            raise RuntimeError("This LinSpectacles host does not support Applets-table columns.")
+        column_id = str(column_id or "").strip()
+        label = str(label or "").strip()
+        kind = str(kind or "text").strip().lower()
+        if not column_id or not label:
+            raise ValueError("column_id and label must be non-empty")
+        if kind not in {"text", "check"}:
+            raise ValueError("kind must be 'text' or 'check'")
+        if not callable(value_provider):
+            raise TypeError("value_provider must be callable")
+        if changed_callback is not None and not callable(changed_callback):
+            raise TypeError("changed_callback must be callable or None")
+        if not isinstance(editable, bool) and not callable(editable):
+            raise TypeError("editable must be a bool or callable")
+        handle = self._add_applets_column_cb(
+            self.module_id, column_id, label, kind, value_provider,
+            changed_callback, editable,
+        )
+        self._applets_column_handles.append(handle)
+        return handle
+
+    def add_applets_action(self, action_id, label, callback):
+        """Add a compact action beside the Hub-owned Applets table (API v7)."""
+        if self._add_applets_action_cb is None:
+            raise RuntimeError("This LinSpectacles host does not support Applets-page actions.")
+        action_id = str(action_id or "").strip()
+        label = str(label or "").strip()
+        if not action_id or not label:
+            raise ValueError("action_id and label must be non-empty")
+        if not callable(callback):
+            raise TypeError("callback must be callable")
+        handle = self._add_applets_action_cb(self.module_id, action_id, label, callback)
+        self._applets_action_handles.append(handle)
+        return handle
 
     def add_suite_state_item(self, label, provider):
         """Contribute a compact Hub State line (Module API v3)."""
@@ -348,6 +459,30 @@ class ModuleContext:
                 pass
         self._suite_state_handles.clear()
 
+        for handle in reversed(self._applets_action_handles):
+            try:
+                if self._remove_applets_action_cb is not None:
+                    self._remove_applets_action_cb(handle)
+            except Exception:
+                pass
+        self._applets_action_handles.clear()
+
+        for handle in reversed(self._applets_column_handles):
+            try:
+                if self._remove_applets_column_cb is not None:
+                    self._remove_applets_column_cb(handle)
+            except Exception:
+                pass
+        self._applets_column_handles.clear()
+
+        for handle in reversed(self._applets_extension_handles):
+            try:
+                if self._remove_applets_extension_cb is not None:
+                    self._remove_applets_extension_cb(handle)
+            except Exception:
+                pass
+        self._applets_extension_handles.clear()
+
         for handle in reversed(self._configuration_handles):
             try:
                 if self._remove_configuration_page_cb is not None:
@@ -363,6 +498,14 @@ class ModuleContext:
                 pass
         self._dashboard_handles.clear()
 
+        for handle in reversed(self._contextual_action_handles):
+            try:
+                if self._remove_contextual_action_cb is not None:
+                    self._remove_contextual_action_cb(handle)
+            except Exception:
+                pass
+        self._contextual_action_handles.clear()
+
         for handle in reversed(self._menu_handles):
             try:
                 self._remove_menu_action_cb(handle)
@@ -372,32 +515,43 @@ class ModuleContext:
 
 
 class ModuleRegistry:
-    """Manifest-only discovery and isolated loading for Hub Modules."""
+    """Manifest-only discovery for the runtime-owned User store plus a package-managed source."""
 
-    def __init__(self, program_root, store=None, system_store=None):
+    def __init__(
+        self, program_root, store=None, system_store=None, primary_source="Shared", primary_key="shared",
+    ):
         self.program_root = Path(program_root).resolve()
-        self.store = (Path(store).expanduser() if store is not None else self.program_root / "modules")
-        self.store.mkdir(parents=True, exist_ok=True)
-        self.system_store = (
-            Path(system_store).expanduser()
-            if system_store is not None
-            else None
-        )
+        self.store = Path(store).expanduser() if store is not None else self.program_root / "modules"
+        self.system_store = Path(system_store).expanduser() if system_store is not None else None
+        self.primary_source = str(primary_source or "Shared")
+        self.primary_key = str(primary_key or "shared")
         self.manifests = {}
         self.instances = {}
         self._package_names = {}
 
+    def set_manual_store(self, store, source_label, source_key="shared"):
+        self.store = Path(store).expanduser()
+        self.primary_source = str(source_label or "Shared")
+        self.primary_key = str(source_key or "shared")
+        self.discover()
+
     def _discovery_stores(self):
-        primary_source = "User" if self.system_store is not None else "Portable"
-        stores = [(self.store, primary_source, True)]
+        stores = [(self.store, self.primary_source, self.primary_key, "manual", True)]
         if self.system_store is not None:
+            stores.append((self.system_store, "RPM", "rpm", "managed", False))
+        deduped = []
+        seen = set()
+        for path, source, source_key, origin, removable in stores:
+            path = Path(path).expanduser()
             try:
-                same_store = self.system_store.resolve() == self.store.resolve()
+                key = str(path.resolve())
             except OSError:
-                same_store = False
-            if not same_store:
-                stores.append((self.system_store, "System (RPM)", False))
-        return stores
+                key = str(path.absolute())
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append((path, str(source), str(source_key), str(origin), bool(removable)))
+        return deduped
 
     @staticmethod
     def _inside(base, candidate):
@@ -418,7 +572,7 @@ class ModuleRegistry:
 
     def discover(self):
         found = {}
-        for store, source, removable in self._discovery_stores():
+        for store, source, source_key, origin, removable in self._discovery_stores():
             if not store.is_dir():
                 continue
             try:
@@ -466,39 +620,41 @@ class ModuleRegistry:
                         enabled_by_default=enabled_by_default,
                         module_api=module_api,
                         source=source,
+                        source_key=source_key,
+                        origin=origin,
                         removable=removable,
                     )
                 except (KeyError, TypeError, ValueError):
                     continue
-                if module_id not in found:
-                    found[module_id] = manifest
+                found.setdefault(manifest.instance_id, manifest)
 
-        # Loaded instances are intentionally not discarded here. The host owns
-        # lifecycle teardown so it can call deactivate() and clean registered
-        # contributions before unloading Python modules. It also handles a
-        # source change for the same ID (user override versus system package).
         self.manifests = found
         return found
 
     def ordered(self, order=None):
         manifests = list(self.manifests.values())
-        if not order:
-            return sorted(manifests, key=lambda m: m.name.lower())
-        wanted = [str(item) for item in order]
+        wanted = [str(item) for item in (order or [])]
         rank = {module_id: index for index, module_id in enumerate(wanted)}
         return sorted(
             manifests,
-            key=lambda m: (rank.get(m.module_id, len(rank)), m.name.lower()),
+            key=lambda m: (
+                rank.get(m.module_id, len(rank)),
+                m.name.lower(),
+                0 if m.origin == "manual" else 1,
+                m.version,
+            ),
         )
+
+    def manifests_for(self, module_id):
+        module_id = str(module_id)
+        return [m for m in self.manifests.values() if m.module_id == module_id]
 
     def _load_entry_module(self, manifest):
         package_name = "linspectacles_suite_module_" + re.sub(
-            r"[^a-zA-Z0-9_]", "_", manifest.module_id
+            r"[^a-zA-Z0-9_]", "_", manifest.instance_id
         )
-        self._package_names[manifest.module_id] = package_name
+        self._package_names[manifest.instance_id] = package_name
 
-        # Create/load the package root so module entrypoints can use relative
-        # imports without requiring the package __init__ to re-export factory.
         init_path = manifest.directory / "__init__.py"
         if init_path.is_file():
             spec = importlib.util.spec_from_file_location(
@@ -549,26 +705,27 @@ class ModuleRegistry:
                 f"{manifest.name} requires Module API {manifest.module_api}; "
                 f"this LinSpectacles supports API {supported}."
             )
-        if manifest.module_id in self.instances:
-            return self.instances[manifest.module_id]
+        if manifest.instance_id in self.instances:
+            return self.instances[manifest.instance_id]
 
         module = self._load_entry_module(manifest)
         factory = getattr(module, manifest.factory, None)
         if not callable(factory):
-            self.unload(manifest.module_id)
+            self.unload(manifest.instance_id)
             raise AttributeError(
                 f"Hub Module {manifest.name} does not export {manifest.factory}()"
             )
         instance = factory(context=context)
         if instance is None:
-            self.unload(manifest.module_id)
+            self.unload(manifest.instance_id)
             raise TypeError(f"Hub Module {manifest.name} factory returned None")
-        self.instances[manifest.module_id] = instance
+        self.instances[manifest.instance_id] = instance
         return instance
 
-    def unload(self, module_id):
-        self.instances.pop(module_id, None)
-        package_name = self._package_names.pop(module_id, None)
+    def unload(self, instance_id):
+        instance_id = str(instance_id)
+        self.instances.pop(instance_id, None)
+        package_name = self._package_names.pop(instance_id, None)
         if package_name:
             self._purge_package(package_name)
 
@@ -617,27 +774,35 @@ class ModuleRegistry:
 
     def install_zip(self, zip_path):
         root, module_id = self.validate_zip(zip_path)
+        self.discover()
+        if any(m.origin == "manual" and m.module_id == module_id for m in self.manifests.values()):
+            raise FileExistsError(f"A User module with ID '{module_id}' already exists in the runtime-owned User store.")
+        self.store.mkdir(parents=True, exist_ok=True)
         destination = self.store / root
         if destination.exists():
             raise FileExistsError(f"Hub Module folder already exists: {destination.name}")
         with zipfile.ZipFile(zip_path, "r") as archive:
             archive.extractall(self.store)
         self.discover()
-        if module_id not in self.manifests:
+        instance_id = f"{self.primary_key}:{module_id}"
+        manifest = self.manifests.get(instance_id)
+        if manifest is None or manifest.directory != destination.resolve():
             shutil.rmtree(destination, ignore_errors=True)
-            raise ValueError("Installed files did not produce a valid Hub Module.")
-        return self.manifests[module_id]
+            self.discover()
+            raise ValueError("Installed files did not produce a valid Hub Module in the runtime-owned User store.")
+        return manifest
 
-    def remove(self, module_id):
-        manifest = self.manifests.get(module_id)
+    def remove(self, instance_id):
+        manifest = self.manifests.get(str(instance_id))
         if manifest is None:
             return False
-        if not manifest.removable:
+        if not manifest.removable or manifest.origin != "manual":
             raise ValueError(
-                "System-installed Hub Modules are managed by the package manager and cannot be removed from LinSpectacles."
+                "Package-managed Hub Modules are managed by their package provider and cannot be removed from LinSpectacles."
             )
         if not self._inside(self.store, manifest.directory):
-            raise ValueError("Refusing to remove a Hub Module outside the writable module store.")
+            raise ValueError("Refusing to remove a Hub Module outside the runtime-owned User module store.")
         shutil.rmtree(manifest.directory)
+        self.unload(manifest.instance_id)
         self.discover()
         return True

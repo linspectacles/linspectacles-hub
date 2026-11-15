@@ -12,7 +12,7 @@ The RPM payload is immutable and is expected under standard system locations:
 - `/usr/libexec/linspectacles/` — Hub code/assets/docs
 - `/usr/libexec/linspectacles/applets/` — immutable system applet discovery root
 - `/usr/libexec/linspectacles/modules/` — immutable system Hub Module discovery root
-- `/usr/share/applications/linspectacles.desktop` — desktop integration
+- `/usr/share/applications/linspectacles-hub.desktop` — desktop integration
 - `/usr/share/icons/hicolor/.../linspectacles.png` — application icon
 - `/usr/share/metainfo/...` — AppStream metadata
 
@@ -26,7 +26,7 @@ LinSpectacles performs no normal runtime writes there. In RPM mode mutable data 
 Therefore adding/removing user applets/modules, changing preferences and
 launching applets standalone do not require root privileges. RPM-owned system
 components are never deleted by the Hub; they are installed/removed by DNF.
-When the same logical component ID exists in both places, the user XDG copy wins.
+When the same logical component ID exists in the XDG User source and the RPM-managed source, both copies remain discovered; normal presentation follows the User/Package-managed preference without comparing versions.
 
 ## Build on Fedora
 
@@ -40,7 +40,118 @@ The script does not use `sudo` or install dependencies. It expects Fedora RPM
 build and desktop/AppStream validation tools to already be installed. Finished
 RPM/SRPM files are copied to `dist-rpm/`.
 
-The application identifies itself as `0.0.7-r1`; the RPM package is **`linspectacles-hub`** with `Version: 0.0.7`, `Release: 2`.
+The application identifies itself as `0.2.2`; the RPM package is **`linspectacles-hub`** with `Version: 0.2.2`, `Release: 1`.
+
+
+### 0.2.2 contextual window titles
+
+- Keeps the desktop application identity **LinSpectacles Hub**.
+- Uses context-only Qt window titles so KDE can present **Dashboard — LinSpectacles Hub** or **Applet Name — LinSpectacles Hub** without duplicating the application name.
+- Uses **Configuration** as the Configuration dialog's context-only title.
+- Leaves Hub runtime, component management, shortcuts and Module API behavior unchanged.
+
+
+### 0.2.1 contextual-help label / README correction
+
+- Corrects the Hub contextual Encyclopedia action label to **What's This?**.
+- Keeps complete release history in the nested `linspectacles/README.md`; root Current release now contains only the actual current release.
+- Adds the requested Hub screenshot to the root README Interface section.
+- Leaves 0.2.0 Hub behavior otherwise unchanged.
+
+### 0.2.0 Hub command/identity consolidation
+
+- Desktop identity is **LinSpectacles Hub** and the desktop entry is `linspectacles-hub.desktop`.
+- Removes visible Help/Tools menus; Documentation remains on `F1`.
+- `Ctrl+W` opens Dashboard; `F5` launches the active applet standalone.
+- Configuration → About is the sole About surface and exposes README, License, Repository and Issues.
+- Module API 8 adds applet-contextual sidebar actions; legacy Encyclopedia What's This? is bridged automatically.
+
+### 0.1.12 restore original tab-page frame
+
+- Restores the pre-0.1.9 `QTabWidget::pane` border exactly (`1px solid #333333`).
+- Leaves tab-button styling, Cgroups tree styling and Runtime/Startup behavior unchanged.
+- No runtime, discovery, component-management or table behavior changes.
+
+### 0.1.11 Runtime/Startup consolidation
+
+- Merges the standalone Startup Configuration tab into Runtime as a Startup section.
+- Preserves Lazy-load utilities behavior and persistence unchanged.
+- Base Configuration order becomes Applets, Modules, optional module pages, Runtime, Appearance, About.
+- No runtime migration, discovery, component-management or styling behavior changes.
+
+### 0.1.10 tab-frame and tree-style correction
+
+- Restores the existing individual tab-button borders and removes the surrounding `QTabWidget::pane` border instead.
+- Adds the Cgroups Inspector 0.0.6 `QTreeWidget` background/frame rule to the Hub stylesheet.
+- No runtime, discovery, module-management or table-sorting behavior changes.
+
+### 0.1.9 Configuration clarity
+
+- Reorders Configuration tabs to Applets, Modules, optional module pages, Startup, Runtime, Appearance, About.
+- Simplifies Applets column labels/order and keeps Layer then Favourite at the far right.
+- Adds click-to-sort Applets/Modules headers and removes individual tab outlines.
+
+### 0.1.8 module-management simplification
+
+- Hub Module enablement is logical-ID based; User/Package-managed preference selects the runtime copy.
+- Configuration puts Module first and shows physical installed copies separately for provenance/removal.
+- Sidebar title readability is restored without abandoning compact version/source provenance.
+
+### 0.1.7 component-model consolidation
+
+- Dashboard Inspection Coverage now reports applet Source directly.
+- Configuration distinguishes provider/source provenance from generic Manual/Managed ownership.
+- Duplicate-instance discovery, Manual/Managed preference, runtime migration and package ownership behavior are otherwise unchanged.
+
+### 0.1.6 runtime-owned Manual storage
+
+- Packaged runtime remains integrated and uses XDG for configuration and Manual applets/modules.
+- Source Portable/Integrated migration is implemented only for source builds; packaged runtime exposes no mode switch.
+- Manual-versus-Managed duplicate presentation from 0.1.5 remains unchanged.
+
+### 0.1.4 runtime-classification correction
+
+Integrated source trees are now recognized from existing desktop integration that points to the exact `main.py`, including Suite Pythoine's launcher metadata. Packaged/RPM classification is unchanged and Suite Pythoine itself requires no change.
+
+### 0.1.2 runtime/path model
+
+- Classifies the Hub runtime independently as Source Portable, Source Integrated, or Packaged.
+- Packaged Hub state remains XDG-backed; the current RPM launcher remains a supported packaged-provider declaration.
+- Generalizes component ownership internally to Manual versus Managed while retaining RPM as the currently implemented managed provider/source label.
+- Does not add runtime migration, source-mode switching, launcher mutation, Manual-vs-Managed presentation preference, or component-policy changes.
+
+### 0.1.1 Hub implementation decomposition
+
+- Refactor-only source organization release; runtime behavior and packaging layout are unchanged.
+- Decomposes the former monolithic Hub implementation into focused main-window, configuration, Dashboard, navigation, applet-host and module-host units.
+- Retains the `linspectacles.host` compatibility import surface.
+
+### 0.1.0 explicit manual/RPM component sources
+
+- Uses the XDG Manual source plus the known RPM/system Managed source.
+- Does not scan any other manual locations as fallbacks.
+- Keeps Manual and RPM copies with the same logical ID separately visible in Configuration while normal presentation follows the Manual/Managed preference.
+- Add, Remove and Open Folder act only on the XDG Manual source; RPM payloads remain DNF/RPM-owned.
+- Applet navigation shows compact `version · source` provenance beneath the title.
+- No persistent component registry is introduced.
+
+### 0.0.11 applet table / tab visual parity
+
+- Applies Kernel Modules alternating-row table styling and Linux ResMon full rounded tab corners.
+- No runtime, Module API, discovery, applet, module, or packaging-layout changes.
+
+### 0.0.10 Dashboard text-entry focus correction
+
+- Prevents Hub Dashboard type-to-search from hijacking printable input from module-owned text fields such as Encyclopedia search.
+- No Module API, discovery, applet, module, or packaging-layout changes.
+
+### 0.0.9 single-table Organizer / shared Portable discovery
+
+Module API 7 lets optional modules contribute columns/actions to the one Hub-owned Applets table. Applet Organizer 0.0.4 uses that API for Favourite/Category rather than stacking another grid. Portable mode now reads shared XDG User and System (RPM) component stores after its own Portable store, while all Portable installs/removals/configuration remain local to the portable tree.
+
+### 0.0.8 Hub-owned applet navigation / Module API 6
+
+The Hub now owns applet search independently of Applet Organizer, adds Configuration → Applets search and drag/drop ZIP installation, and exposes Module API 6 so optional modules can enhance that existing Applets page. RPM/user component discovery, precedence and package-manager ownership remain unchanged.
 
 ### 0.0.7 packaged component discovery
 

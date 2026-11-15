@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
   <id>io.github.linspectacles.LinSpectacles</id>
-  <name>LinSpectacles</name>
+  <name>LinSpectacles Hub</name>
   <summary>Linux Inspection Suite</summary>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-or-later</project_license>
@@ -9,7 +9,7 @@
     <p>LinSpectacles is a modular suite of read-only Linux inspection utilities with independently portable applets.</p>
     <p>The RPM installs the LinSpectacles Hub application. Applets and Hub Modules may be user-installed or provided as immutable RPM-managed system components.</p>
   </description>
-  <launchable type="desktop-id">linspectacles.desktop</launchable>
+  <launchable type="desktop-id">linspectacles-hub.desktop</launchable>
   <categories>
     <category>System</category>
   </categories>
@@ -30,6 +30,66 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.2.2" date="2026-11-15" type="stable">
+      <description><p>Separates contextual Hub window titles from the LinSpectacles Hub desktop identity so Dashboard and applet titlebars do not duplicate the application name.</p></description>
+    </release>
+    <release version="0.2.1" date="2026-11-15" type="stable">
+      <description><p>Corrects the contextual Encyclopedia action label and README publication layout while leaving Hub 0.2.0 behavior otherwise unchanged.</p></description>
+    </release>
+    <release version="0.2.0" date="2026-11-15" type="stable">
+      <description><p>Consolidates Hub identity, shortcuts, About and contextual module actions while removing the visible Help and Tools menus.</p></description>
+    </release>
+    <release version="0.1.12" date="2026-11-10" type="stable">
+      <description><p>Restores the original Configuration tab-page frame while leaving tab buttons and runtime behavior unchanged.</p></description>
+    </release>
+    <release version="0.1.11" date="2026-11-10" type="stable">
+      <description><p>Merges Startup configuration into Runtime while preserving startup behavior unchanged.</p></description>
+    </release>
+    <release version="0.1.10" date="2026-11-10" type="stable">
+      <description><p>Corrects Configuration tab framing and adds Cgroups Inspector tree-frame parity without changing runtime behavior.</p></description>
+    </release>
+    <release version="0.1.9" date="2026-11-10" type="stable">
+      <description><p>Refines Configuration tab and Applets table ordering, removes individual tab outlines, and adds sortable Applets and Modules headers.</p></description>
+    </release>
+    <release version="0.1.8" date="2026-11-10" type="stable">
+      <description><p>Simplifies logical Hub Module enablement, clarifies User versus Package-managed ownership, and improves compact sidebar readability.</p></description>
+    </release>
+    <release version="0.1.7" date="2026-11-09" type="stable">
+      <description><p>Consolidates instance-aware Manual/Managed component presentation, Dashboard source provenance and Configuration ownership reporting.</p></description>
+    </release>
+    <release version="0.1.6" date="2026-11-09" type="stable">
+      <description><p>Adds safe Source Portable/Integrated migration and makes runtime mode own the Manual component location while packaged runtimes remain integrated.</p></description>
+    </release>
+    <release version="0.1.5" date="2026-11-09" type="stable">
+      <description><p>Adds a Manual-versus-Managed component preference for duplicate logical IDs while keeping discovery and Configuration instance-complete and never comparing versions.</p></description>
+    </release>
+    <release version="0.1.4" date="2026-11-09" type="stable">
+      <description><p>Corrects integrated-source detection by recognizing the existing desktop integration for this exact source tree, without requiring Suite Pythoine launch arguments or path-name inference.</p></description>
+    </release>
+    <release version="0.1.3" date="2026-11-09" type="stable">
+      <description><p>Attempted source runtime classification through the optional Suite Pythoine launch argument; superseded by 0.1.4.</p></description>
+    </release>
+    <release version="0.1.2" date="2026-11-09" type="stable">
+      <description><p>Introduces explicit Source Portable, Source Integrated and Packaged runtime classification, with Hub configuration/data paths resolved from that model and component-source behavior otherwise preserved.</p></description>
+    </release>
+    <release version="0.1.1" date="2026-11-09" type="stable">
+      <description><p>Refactor-only release decomposing the Hub implementation into focused source units while preserving 0.1.0 runtime and UI behavior.</p></description>
+    </release>
+    <release version="0.1.0" date="2026-11-09" type="stable">
+      <description><p>Establishes one explicit user-selected manual component source plus RPM/system discovery, preserves Manual/RPM duplicate copies visibly, and adds compact version/source applet navigation provenance.</p></description>
+    </release>
+    <release version="0.0.11" date="2026-11-09" type="stable">
+      <description><p>Aligns Hub table alternating rows with Kernel Modules and tab corner geometry with Linux ResMon, without changing runtime behavior.</p></description>
+    </release>
+    <release version="0.0.10" date="2026-11-09" type="stable">
+      <description><p>Fixes Dashboard type-to-search so module-owned text fields such as Encyclopedia search retain keyboard input instead of redirecting it to applet search.</p></description>
+    </release>
+    <release version="0.0.9" date="2026-11-05" type="stable">
+      <description><p>Corrects Applet Organizer integration to use Favourite/Category columns in the single Applets table and extends Portable discovery to shared User/XDG and System (RPM) fallback stores.</p></description>
+    </release>
+    <release version="0.0.8" date="2026-11-05" type="stable">
+      <description><p>Makes applet search a permanent Hub capability and adds Module API 6 Applets-page extensions so optional organization features enhance the existing Applets and Hub State surfaces.</p></description>
+    </release>
     <release version="0.0.7-r1" date="2026-09-24" type="stable">
       <description><p>Completes the official offline Hub Module catalogue with Boot Environment and System Identity.</p></description>
     </release>

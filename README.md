@@ -10,7 +10,7 @@
 
 LinSpectacles is a modular Linux inspection ecosystem built around focused, read-only inspection utilities. Standalone-capable **applets** inspect Linux subsystems independently; **LinSpectacles Hub** provides an optional integrated workbench for discovering, organizing and using them together; optional **Hub Modules** extend the workbench itself.
 
-Current Hub release: **0.0.7-r1**
+Current Hub release: **0.2.2**
 
 Repository: <https://github.com/linspectacles/linspectacles-hub>
 
@@ -34,10 +34,10 @@ The Hub source release is deliberately **Hub-only**: applet and Hub Module paylo
 - Built-in **Dashboard** reports host-known state without triggering applet scans.
 - **Inspection Coverage** with Enabled Only and Loaded Only filters.
 - Independent **Hub Modules** for workbench capabilities that are not standalone inspectors.
-- **Module API 5**, with compatibility for Module APIs 1–4.
-- Separate module **Enabled** and **Dashboard** controls.
+- **Module API 8**, with compatibility for earlier Module APIs.
+- Logical-module **Enabled** and **Dashboard** controls.
 - Permissive offline module catalogue: uncatalogued installed modules remain valid.
-- Portable/user components can override system/RPM components with the same logical ID.
+- Runtime mode owns the single **User** component location: Source Portable uses the Hub tree; Source Integrated and Packaged use XDG user data. The known **Package-managed/system** source is discovered separately; duplicate physical copies remain visible in Configuration while ordinary navigation follows the user's User/Package-managed preference.
 - RPM-managed system components are visible to the Hub but remain owned by DNF/RPM.
 - Portable integration metadata for **Suite Pythoine**.
 - The Hub itself remains unprivileged.
@@ -71,11 +71,31 @@ Enabled applets appear beneath it as inspection views. An enabled organizer modu
 
 When an applet is active, **Launch Standalone...** starts its declared standalone launcher as a separate process. The embedded instance remains in place.
 
-### Help and Tools
+### Documentation, About and contextual help
 
-The built-in **Help** menu provides documentation, repository/issue links and **About LinSpectacles Hub**.
+The Hub has no Help or Tools menu. **F1** opens Hub documentation. **Configuration → About** is the single About surface and provides README, License, Repository and Issues links. Enabled modules may contribute compact contextual actions above **Launch Standalone...**; Encyclopedia's **What's This?** uses this surface.
 
-**Tools** is an extension point and remains hidden unless an enabled Hub Module contributes an action.
+### Hub shortcuts
+
+| Shortcut | Action |
+| --- | --- |
+| `Ctrl+,` | Previous applet |
+| `Ctrl+.` | Next applet |
+| `Ctrl+F` | Focus applet search |
+| `Ctrl+W` | Dashboard |
+| `F5` | Launch active applet standalone |
+| `F1` | Hub documentation |
+| `Shift+F1` | What's This? when provided by Encyclopedia |
+
+<p align="center">
+  <a href="https://github.com/brunonlinespace/brunonlinespace/blob/main/linspectacles/linspectacles-hub.png">
+    <img
+      src="https://raw.githubusercontent.com/brunonlinespace/brunonlinespace/main/linspectacles/linspectacles-hub.png"
+      alt="LinSpectacles Hub screenshot"
+      width="900"
+    >
+  </a>
+</p>
 
 ## Applets
 
@@ -85,238 +105,38 @@ Applets do not depend on the Hub and must not import `linspectacles.*` merely to
 
 ### Applet discovery
 
-In **portable mode**, applets live in the source/runtime tree:
+LinSpectacles discovers applets from exactly two sources:
+
+1. the runtime-owned **User** component location; and
+2. the known **Package-managed/system** location.
+
+User storage is not an independent folder preference:
+
+- **Source — Portable:** `<Hub>/applets/`
+- **Source — Integrated:** `${XDG_DATA_HOME:-~/.local/share}/linspectacles/applets/`
+- **Packaged:** `${XDG_DATA_HOME:-~/.local/share}/linspectacles/applets/`
+
+The current Fedora package-managed provider reads RPM applets from `/usr/libexec/linspectacles/applets/` (or the packaged system root). LinSpectacles does not silently scan other manual stores.
+
+If User and Package-managed sources both contain the same logical applet ID, **both copies remain discovered and visible in Configuration**. Ordinary sidebar navigation shows the enabled copy from the global **Prefer User / Prefer Package-managed** setting. If only one enabled copy exists, that copy is shown regardless of preference. Versions are never compared and no persistent applet registry is created.
+
+A normal User applet looks like:
 
 ```text
-applets/
-```
-
-A normal portable applet looks like:
-
-```text
-applets/my_applet/
+<user-root>/applets/my_applet/
   applet.json
   __init__.py
   applet.py
   standalone.py
 ```
 
-In **RPM mode**, the Hub merges two stores:
-
-```text
-${XDG_DATA_HOME:-~/.local/share}/linspectacles/applets/
-/usr/libexec/linspectacles/applets/
-```
-
-The first is user-owned. The second is immutable system content managed by RPM/DNF. If both contain the same logical applet ID, the valid user copy takes precedence.
-
 ### Applet management
 
-Use **Configuration... → Applets** to inspect discovered applets and manage user/portable copies.
+Use **Configuration... → Applets** to inspect discovered copies and manage the runtime-owned User source. The Hub-owned page includes permanent applet search; `Ctrl+F` focuses search, and type-to-search works from Dashboard/sidebar navigation contexts without requiring Applet Organizer.
 
-The Hub can enable/disable installed applets, add portable applet ZIPs, refresh discovery and launch applets standalone. User/portable applets may be removed by the Hub. System/RPM applets are identified as **System (RPM)** and are not deleted by LinSpectacles; removal belongs to the package manager.
+**Add Applet...**, drag-and-drop installation, **Remove**, and **Open User Applets Folder** operate only on the active User source. Package-managed applets remain visible but are package-provider owned and cannot be deleted by LinSpectacles.
 
-ZIP installation requires one top-level applet directory and a valid manifest. Discovery itself does not execute applet code.
-
-### Applet identity
-
-Current prefixed manifests may use:
-
-```text
-linspectacles-<applet-id>
-```
-
-Legacy unprefixed IDs remain accepted and normalize to the same logical applet identity. The mistaken historical `linspector-<applet-id>` form is not accepted.
-
-### Inspection behavior
-
-Applet scan behavior belongs to the applet.
-
-Potentially expensive or policy-sensitive acquisition can remain behind an explicit applet Scan action even when Hub lazy loading is disabled. Dashboard/coverage presentation does not trigger applet scans merely to populate host state.
-
-## Hub Modules
-
-A **Hub Module** extends the LinSpectacles workbench rather than inspecting a Linux subsystem as a standalone application.
-
-Modules never become sidebar applets.
-
-### Module discovery
-
-In portable mode:
-
-```text
-modules/
-```
-
-A normal module looks like:
-
-```text
-modules/my_module/
-  module.json
-  module.py
-```
-
-In RPM mode, the Hub merges:
-
-```text
-${XDG_DATA_HOME:-~/.local/share}/linspectacles/modules/
-/usr/libexec/linspectacles/modules/
-```
-
-A valid user copy takes precedence over a system/RPM copy with the same logical module ID.
-
-Discovery reads `module.json` first. Python is imported only when the module is enabled.
-
-### Module management
-
-Use **Configuration... → Modules** to:
-
-- see installed and catalogue-known modules
-- enable or disable an installed module
-- independently show/hide its Dashboard contributions
-- add a portable module ZIP
-- refresh discovery
-- manage contribution order where supported
-
-New user-installed modules remain **disabled** after installation so installation and execution remain separate trust decisions.
-
-System/RPM modules can be enabled and used normally but cannot be removed by the Hub. DNF/RPM owns their installation, update and removal.
-
-The built-in catalogue is offline and permissive. It does not download or automatically install modules, and an unknown installed module can still appear as **Uncatalogued**.
-
-### Module API
-
-The current Hub provides **Module API 5** and remains compatible with APIs 1–4.
-
-Documented module services include:
-
-- Help and Tools menu actions
-- Dashboard widgets
-- Configuration contributions
-- Hub State items
-- Inspection Coverage annotations and named columns
-- host-known applet state
-- declarative applet metadata
-- current-applet state and applet activation
-- namespaced module storage
-- status reporting
-- Hub events
-- optional host-owned navigation organization
-
-Module contributions registered through the host context are tracked and cleaned up when the module is disabled or removed.
-
-See `MODULE-SDK.md` for the complete contract.
-
-## Configuration
-
-The base Configuration pages are:
-
-```text
-Applets → Appearance → Startup → Modules → About
-```
-
-Enabled modules may contribute additional pages according to the Module API. Applet and Module management remain distinct.
-
-### Applets
-
-Manage discovered applets, enabled state and runtime/source information.
-
-### Appearance
-
-Choose the font used by metadata/details panes in inspector applets. The selected font is applied to loaded applets when Configuration closes.
-
-### Startup
-
-**Lazy-load utilities** controls whether enabled applets are imported on first use or initialized during Hub startup.
-
-Hub Modules are separate: enabled modules activate at startup because they contribute host functionality rather than sidebar views.
-
-### Modules
-
-Manage Hub Module installation source, activation, Dashboard visibility and contribution order.
-
-### About
-
-Identifies the running host precisely as **LinSpectacles Hub**, while retaining **Linux Inspection Suite** as the product descriptor.
-
-## Useful keyboard shortcuts
-
-| Shortcut | Action |
-| --- | --- |
-| `Ctrl+,` | Previous Applet |
-| `Ctrl+.` | Next Applet |
-| `F5` | Dashboard |
-| `F1` | Documentation |
-
-Previous/Next Applet follows the current visible sidebar order, wraps at either end and skips Dashboard.
-
-## Runtime layouts
-
-### Portable
-
-The Hub can run from its source/portable tree:
-
-```text
-main.py
-linspectacles/
-assets/
-applets/
-modules/
-config/
-APPLET-SDK.md
-MODULE-SDK.md
-suite-pythoine-extension.json
-LICENSE
-README.md
-```
-
-Key roles:
-
-- `main.py` — stable Hub entrypoint
-- `linspectacles/` — Hub implementation and detailed release/implementation notes
-- `assets/` — LinSpectacles artwork
-- `applets/` — portable applet store
-- `modules/` — portable Hub Module store
-- `config/` — portable Hub preferences and namespaced module data
-- `APPLET-SDK.md` — applet integration contract
-- `MODULE-SDK.md` — Hub Module integration contract
-- `suite-pythoine-extension.json` — Suite Pythoine identity/launch descriptor
-
-### RPM
-
-The Fedora/COPR package is:
-
-```text
-linspectacles-hub
-```
-
-The executable remains:
-
-```text
-linspectacles
-```
-
-Immutable Hub code and RPM-managed components live beneath:
-
-```text
-/usr/libexec/linspectacles/
-```
-
-Mutable user state remains user-owned:
-
-```text
-${XDG_CONFIG_HOME:-~/.config}/linspectacles/
-${XDG_DATA_HOME:-~/.local/share}/linspectacles/applets/
-${XDG_DATA_HOME:-~/.local/share}/linspectacles/modules/
-```
-
-Normal Hub operation does not require running the GUI as root.
-
-## Suite Pythoine
-
-LinSpectacles remains independently runnable.
-
-Suite Pythoine integration is exposed through the bundled descriptor:
+For source builds, **Configuration → Runtime** can migrate the Hub between Portable and Integrated. Configuration is copied to the target runtime; manual applets/modules may be copied optionally; existing destination component folders are never overwritten; the old side is left intact; desktop integration is removed/created as appropriate; and the Hub restarts using the target paths.
 
 ```bash
 python3 main.py --suite-pythoine
@@ -363,27 +183,23 @@ On Fedora, the included build script creates the RPM/SRPM artifacts used for COP
 
 ## Current release
 
-**0.0.7-r1** completes the built-in offline Hub Module catalogue by adding **Boot Environment** and **System Identity**, which were already valid/discoverable installed Modules but were missing from the known catalogue.
-
-The underlying 0.0.7 release introduced packaged-system component discovery. RPM-installed applets and modules can live under `/usr/libexec/linspectacles/{applets,modules}`, while user-owned XDG copies remain writable and take precedence for duplicate logical IDs.
-
-For detailed implementation/release history, see [`linspectacles/README.md`](linspectacles/README.md).
+**0.2.2** corrects Hub window-title ownership: the desktop application identity remains **LinSpectacles Hub**, while the active Hub window title now reports only its current context, allowing the desktop shell to present **Dashboard — LinSpectacles Hub** or **Applet Name — LinSpectacles Hub** without duplicating the application name. Configuration follows the same context-only title rule.
 
 ## Configuration storage
 
-Portable mode stores host preferences beneath:
+**Source — Portable** stores host preferences beneath the Hub tree:
 
 ```text
 config/
 ```
 
-RPM mode uses:
+**Source — Integrated** and **Packaged** use:
 
 ```text
 ${XDG_CONFIG_HOME:-~/.config}/linspectacles/
 ```
 
-Module data is namespaced within the active configuration/data model so one module cannot accidentally share another module's state.
+Manual applets/modules likewise follow runtime ownership: internal for Source Portable, XDG user data for Integrated/Packaged. Module data is namespaced within the active configuration model so one module cannot accidentally share another module's state.
 
 ## Branding
 

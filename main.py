@@ -20,10 +20,11 @@ def main():
     if "--component-info" in sys.argv:
         print(json.dumps(component_info(), ensure_ascii=False))
         return 0
-    if "--suite-pythoine" in sys.argv:
+    suite_pythoine = "--suite-pythoine" in sys.argv
+    if suite_pythoine:
         sys.argv.remove("--suite-pythoine")
     from linspectacles.host import run
-    return run(PROGRAM_ROOT)
+    return run(PROGRAM_ROOT, integrated_source=suite_pythoine)
 
 
 if __name__ == "__main__":

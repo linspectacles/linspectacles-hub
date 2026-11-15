@@ -19,14 +19,7 @@ REJECTED_APPLET_ID_PREFIXES = ("linspector-",)
 
 
 def normalize_applet_id(value):
-    """Return the stable logical applet ID for supported manifest ID forms.
-
-    New applets may declare ``linspectacles-<applet-id>`` while legacy applets
-    continue to declare ``<applet-id>``.  The mistaken r3 ``linspector-`` prefix
-    is explicitly rejected.  The host deliberately normalizes
-    both forms to the legacy logical ID so existing configuration, Module API
-    consumers and navigation/catalogue state keep referring to one applet.
-    """
+    """Return the stable logical applet ID for supported manifest ID forms."""
     declared_id = str(value).strip()
     if not SAFE_ID.fullmatch(declared_id):
         raise ValueError("Applet ID is invalid or unsupported.")
@@ -54,36 +47,52 @@ class AppletManifest:
     standalone: str
     description: str
     source: str
+    source_key: str
+    origin: str
     removable: bool
+
+    @property
+    def instance_id(self):
+        return f"{self.source_key}:{self.applet_id}"
 
 
 class AppletRegistry:
-    def __init__(self, program_root, store=None, system_store=None):
+    """Filesystem-only discovery for the runtime-owned User store plus a package-managed source."""
+
+    def __init__(
+        self, program_root, store=None, system_store=None, primary_source="Shared", primary_key="shared",
+    ):
         self.program_root = Path(program_root).resolve()
-        self.store = (Path(store).expanduser() if store is not None else self.program_root / "applets")
-        self.store.mkdir(parents=True, exist_ok=True)
-        self.system_store = (
-            Path(system_store).expanduser()
-            if system_store is not None
-            else None
-        )
+        self.store = Path(store).expanduser() if store is not None else self.program_root / "applets"
+        self.system_store = Path(system_store).expanduser() if system_store is not None else None
+        self.primary_source = str(primary_source or "Shared")
+        self.primary_key = str(primary_key or "shared")
         self.manifests = {}
         self.modules = {}
 
+    def set_manual_store(self, store, source_label, source_key="shared"):
+        self.store = Path(store).expanduser()
+        self.primary_source = str(source_label or "Shared")
+        self.primary_key = str(source_key or "shared")
+        self.discover()
+
     def _discovery_stores(self):
-        # The mutable user/portable store always has precedence. In packaged
-        # mode an immutable system store is consulted only for IDs not already
-        # supplied by the user store.
-        primary_source = "User" if self.system_store is not None else "Portable"
-        stores = [(self.store, primary_source, True)]
+        stores = [(self.store, self.primary_source, self.primary_key, "manual", True)]
         if self.system_store is not None:
+            stores.append((self.system_store, "RPM", "rpm", "managed", False))
+        deduped = []
+        seen = set()
+        for path, source, source_key, origin, removable in stores:
+            path = Path(path).expanduser()
             try:
-                same_store = self.system_store.resolve() == self.store.resolve()
+                key = str(path.resolve())
             except OSError:
-                same_store = False
-            if not same_store:
-                stores.append((self.system_store, "System (RPM)", False))
-        return stores
+                key = str(path.absolute())
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append((path, str(source), str(source_key), str(origin), bool(removable)))
+        return deduped
 
     @staticmethod
     def _inside(base, candidate):
@@ -95,7 +104,7 @@ class AppletRegistry:
 
     def discover(self):
         found = {}
-        for store, source, removable in self._discovery_stores():
+        for store, source, source_key, origin, removable in self._discovery_stores():
             if not store.is_dir():
                 continue
             try:
@@ -132,21 +141,21 @@ class AppletRegistry:
                         standalone=standalone,
                         description=str(raw.get("description", "")),
                         source=source,
+                        source_key=source_key,
+                        origin=origin,
                         removable=removable,
                     )
                 except (KeyError, TypeError, ValueError):
                     continue
-                if applet_id not in found:
-                    found[applet_id] = manifest
+                # One logical ID per source. Manual and managed copies intentionally coexist.
+                found.setdefault(manifest.instance_id, manifest)
 
-        # If an applet ID changes source (for example a new user override
-        # shadows a system RPM copy), do not retain the old imported package.
         previous = self.manifests
-        for applet_id in list(self.modules):
-            old = previous.get(applet_id)
-            new = found.get(applet_id)
+        for instance_id in list(self.modules):
+            old = previous.get(instance_id)
+            new = found.get(instance_id)
             if new is None or old is None or old.directory != new.directory:
-                self.modules.pop(applet_id, None)
+                self.modules.pop(instance_id, None)
         self.manifests = found
         return found
 
@@ -155,13 +164,25 @@ class AppletRegistry:
         rank = {applet_id: index for index, applet_id in enumerate(preferred_order)}
         return sorted(
             self.manifests.values(),
-            key=lambda m: (rank.get(m.applet_id, 100000 + m.order), m.order, m.name.lower()),
+            key=lambda m: (
+                rank.get(m.applet_id, 100000 + m.order),
+                m.order,
+                m.name.lower(),
+                0 if m.origin == "manual" else 1,
+                m.version,
+            ),
         )
 
+    def manifests_for(self, applet_id):
+        applet_id = str(applet_id)
+        return [m for m in self.manifests.values() if m.applet_id == applet_id]
+
     def load_widget(self, manifest, parent=None):
-        module = self.modules.get(manifest.applet_id)
+        module = self.modules.get(manifest.instance_id)
         if module is None:
-            package_name = "linspectacles_applet_" + re.sub(r"[^a-zA-Z0-9_]", "_", manifest.applet_id)
+            package_name = "linspectacles_applet_" + re.sub(
+                r"[^a-zA-Z0-9_]", "_", manifest.instance_id
+            )
             init_path = manifest.directory / "__init__.py"
             load_path = init_path if init_path.is_file() else manifest.directory / manifest.entrypoint
             spec = importlib.util.spec_from_file_location(
@@ -178,7 +199,7 @@ class AppletRegistry:
             except Exception:
                 sys.modules.pop(package_name, None)
                 raise
-            self.modules[manifest.applet_id] = module
+            self.modules[manifest.instance_id] = module
         factory = getattr(module, manifest.factory, None)
         if factory is None:
             raise AttributeError(f"Applet {manifest.name} does not export {manifest.factory}()")
@@ -211,28 +232,35 @@ class AppletRegistry:
 
     def install_zip(self, zip_path):
         root, applet_id = self.validate_zip(zip_path)
+        self.discover()
+        if any(m.origin == "manual" and m.applet_id == applet_id for m in self.manifests.values()):
+            raise FileExistsError(f"A User applet with ID '{applet_id}' already exists in the runtime-owned User store.")
+        self.store.mkdir(parents=True, exist_ok=True)
         destination = self.store / root
         if destination.exists():
             raise FileExistsError(f"Applet folder already exists: {destination.name}")
         with zipfile.ZipFile(zip_path, "r") as archive:
             archive.extractall(self.store)
         self.discover()
-        if applet_id not in self.manifests:
+        instance_id = f"{self.primary_key}:{applet_id}"
+        manifest = self.manifests.get(instance_id)
+        if manifest is None or manifest.directory != destination.resolve():
             shutil.rmtree(destination, ignore_errors=True)
-            raise ValueError("Installed files did not produce a valid applet.")
-        return self.manifests[applet_id]
+            self.discover()
+            raise ValueError("Installed files did not produce a valid applet in the runtime-owned User store.")
+        return manifest
 
-    def remove(self, applet_id):
-        manifest = self.manifests.get(applet_id)
+    def remove(self, instance_id):
+        manifest = self.manifests.get(str(instance_id))
         if manifest is None:
             return False
-        if not manifest.removable:
+        if not manifest.removable or manifest.origin != "manual":
             raise ValueError(
-                "System-installed applets are managed by the package manager and cannot be removed from LinSpectacles."
+                "Package-managed applets are managed by their package provider and cannot be removed from LinSpectacles."
             )
         if not self._inside(self.store, manifest.directory):
-            raise ValueError("Refusing to remove an applet outside the writable applet store.")
+            raise ValueError("Refusing to remove an applet outside the runtime-owned User applet store.")
         shutil.rmtree(manifest.directory)
-        self.modules.pop(applet_id, None)
+        self.modules.pop(manifest.instance_id, None)
         self.discover()
         return True
