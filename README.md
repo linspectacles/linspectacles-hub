@@ -45,16 +45,6 @@ The Hub source release is deliberately **Hub-only**: applet and Hub Module paylo
 
 ## Interface
 
-<p align="center">
-  <a href="https://github.com/brunonlinespace/brunonlinespace/blob/main/linspectacles/linspectacles-hub.png">
-    <img
-      src="https://raw.githubusercontent.com/brunonlinespace/brunonlinespace/main/linspectacles/linspectacles-hub.png"
-      alt="LinSpectacles Hub screenshot"
-      width="900"
-    >
-  </a>
-</p>
-
 ### Dashboard
 
 Dashboard is the Hub's only built-in content page. It reports host-known state without opening applets or running their scans.
@@ -80,6 +70,16 @@ Dashboard remains fixed at the top of the sidebar.
 Enabled applets appear beneath it as inspection views. An enabled organizer module may provide a richer navigation model while the Hub retains ownership of applet activation and lifecycle.
 
 When an applet is active, **Launch Standalone...** starts its declared standalone launcher as a separate process. The embedded instance remains in place.
+
+<p align="center">
+  <a href="https://github.com/brunonlinespace/brunonlinespace/blob/main/linspectacles/linspectacles-hub.png">
+    <img
+      src="https://raw.githubusercontent.com/brunonlinespace/brunonlinespace/main/linspectacles/linspectacles-hub.png"
+      alt="LinSpectacles Hub screenshot"
+      width="900"
+    >
+  </a>
+</p>
 
 ### Documentation, About and contextual help
 
