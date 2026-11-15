@@ -45,6 +45,16 @@ The Hub source release is deliberately **Hub-only**: applet and Hub Module paylo
 
 ## Interface
 
+<p align="center">
+  <a href="https://github.com/brunonlinespace/brunonlinespace/blob/main/linspectacles/linspectacles-hub.png">
+    <img
+      src="https://raw.githubusercontent.com/brunonlinespace/brunonlinespace/main/linspectacles/linspectacles-hub.png"
+      alt="LinSpectacles Hub screenshot"
+      width="900"
+    >
+  </a>
+</p>
+
 ### Dashboard
 
 Dashboard is the Hub's only built-in content page. It reports host-known state without opening applets or running their scans.
@@ -86,16 +96,6 @@ The Hub has no Help or Tools menu. **F1** opens Hub documentation. **Configurati
 | `F5` | Launch active applet standalone |
 | `F1` | Hub documentation |
 | `Shift+F1` | What's This? when provided by Encyclopedia |
-
-<p align="center">
-  <a href="https://github.com/brunonlinespace/brunonlinespace/blob/main/linspectacles/linspectacles-hub.png">
-    <img
-      src="https://raw.githubusercontent.com/brunonlinespace/brunonlinespace/main/linspectacles/linspectacles-hub.png"
-      alt="LinSpectacles Hub screenshot"
-      width="900"
-    >
-  </a>
-</p>
 
 ## Applets
 
