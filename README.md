@@ -33,7 +33,7 @@ The Hub source release is deliberately **Hub-only**: applet and Hub Module paylo
 - Optional **lazy loading** so enabled applets are imported only when first opened.
 - Built-in **Dashboard** reports host-known state without triggering applet scans.
 - **Inspection Coverage** with Enabled Only and Loaded Only filters.
-- Independent **Hub Modules** for workbench capabilities that are not standalone inspectors.
+- Independent **[Hub Modules](https://github.com/linspectacles/linspectacles-modules)** for workbench capabilities that are not standalone inspectors.
 - **Module API 8**, with compatibility for earlier Module APIs.
 - Logical-module **Enabled** and **Dashboard** controls.
 - Permissive offline module catalogue: uncatalogued installed modules remain valid.
@@ -242,6 +242,7 @@ Copyright © 2026 **brunonlinespace**.
 ## Links
 
 - LinSpectacles Hub: <https://github.com/linspectacles/linspectacles-hub>
+- LinSpectacles Modules: <https://github.com/linspectacles/linspectacles-modules>
 - Issues: <https://github.com/linspectacles/linspectacles-hub/issues>
 - LinSpectacles organization: <https://github.com/linspectacles/>
 - brunonlinespace: <https://github.com/brunonlinespace/>
