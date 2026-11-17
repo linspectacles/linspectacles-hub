@@ -118,7 +118,7 @@ class ManualComponentLocationDialog(QDialog):
 
     def _browse_custom(self):
         start = self.custom_edit.text().strip() or str(Path.home())
-        directory = QFileDialog.getExistingDirectory(self, "Choose User Component Location", start)
+        directory = QFileDialog.getExistingDirectory(None, "Choose User Component Location", start)
         if directory:
             self.custom_edit.setText(directory)
             self.custom_radio.setChecked(True)

@@ -30,6 +30,9 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.2.3" date="2026-11-17" type="stable">
+      <description><p>Restores native file and folder choosers by restricting Hub styling to the Hub window and using unparented chooser dialogs.</p></description>
+    </release>
     <release version="0.2.2" date="2026-11-15" type="stable">
       <description><p>Separates contextual Hub window titles from the LinSpectacles Hub desktop identity so Dashboard and applet titlebars do not duplicate the application name.</p></description>
     </release>

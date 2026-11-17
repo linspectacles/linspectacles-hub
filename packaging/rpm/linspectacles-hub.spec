@@ -1,5 +1,5 @@
 Name:           linspectacles-hub
-Version:        0.2.2
+Version:        0.2.3
 Release:        1%{?dist}
 Summary:        Linux Inspection Suite
 License:        GPL-3.0-or-later
@@ -70,6 +70,11 @@ appstreamcli validate --no-net "%{buildroot}%{_metainfodir}/io.github.linspectac
 %{_metainfodir}/io.github.linspectacles.LinSpectacles.metainfo.xml
 
 %changelog
+* Tue Nov 17 2026 brunonlinespace - 0.2.3-1
+- Scope the Hub stylesheet to the Hub window, leaving native file and folder choosers unstyled.
+- Use unparented native choosers for Add Applet, Add Module and User Component Location.
+- Replace the root README with the supplied version and update release metadata.
+
 * Sun Nov 15 2026 brunonlinespace - 0.2.2-1
 - Separate contextual Hub window titles from the LinSpectacles Hub desktop identity.
 - Show Dashboard or the active applet name without duplicating the application name in KDE titlebars.

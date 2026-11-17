@@ -3,8 +3,8 @@ set -euo pipefail
 
 HERE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd -- "$HERE/../.." && pwd)"
-VERSION="0.2.2"
-TOPDIR="${RPM_TOPDIR:-${XDG_CACHE_HOME:-$HOME/.cache}/linspectacles/rpmbuild-0.2.2}"
+VERSION="0.2.3"
+TOPDIR="${RPM_TOPDIR:-${XDG_CACHE_HOME:-$HOME/.cache}/linspectacles/rpmbuild-0.2.3}"
 DIST_OUT="$ROOT/dist-rpm"
 
 for tool in rpmbuild python3 desktop-file-validate appstreamcli; do

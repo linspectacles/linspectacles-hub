@@ -2,7 +2,7 @@
   <img src="assets/linspectacles-logo.png" alt="LinSpectacles penguin X-ray roundel" width="180">
 </p>
 
-# LinSpectacles
+# LinSpectacles Hub
 
 **Linux Inspection Suite**
 
@@ -10,9 +10,19 @@
 
 LinSpectacles is a modular Linux inspection ecosystem built around focused, read-only inspection utilities. Standalone-capable **applets** inspect Linux subsystems independently; **LinSpectacles Hub** provides an optional integrated workbench for discovering, organizing and using them together; optional **Hub Modules** extend the workbench itself.
 
-Current Hub release: **0.2.2**
+Current Hub release: **0.2.3**
 
 Repository: <https://github.com/linspectacles/linspectacles-hub>
+
+<p align="center">
+  <a href="https://github.com/brunonlinespace/brunonlinespace/blob/main/linspectacles/linspectacles-hub.png">
+    <img
+      src="https://raw.githubusercontent.com/brunonlinespace/brunonlinespace/main/linspectacles/linspectacles-hub.png"
+      alt="LinSpectacles Hub screenshot"
+      width="900"
+    >
+  </a>
+</p>
 
 ## What LinSpectacles Hub is
 
@@ -70,16 +80,6 @@ Dashboard remains fixed at the top of the sidebar.
 Enabled applets appear beneath it as inspection views. An enabled organizer module may provide a richer navigation model while the Hub retains ownership of applet activation and lifecycle.
 
 When an applet is active, **Launch Standalone...** starts its declared standalone launcher as a separate process. The embedded instance remains in place.
-
-<p align="center">
-  <a href="https://github.com/brunonlinespace/brunonlinespace/blob/main/linspectacles/linspectacles-hub.png">
-    <img
-      src="https://raw.githubusercontent.com/brunonlinespace/brunonlinespace/main/linspectacles/linspectacles-hub.png"
-      alt="LinSpectacles Hub screenshot"
-      width="900"
-    >
-  </a>
-</p>
 
 ### Documentation, About and contextual help
 
@@ -171,6 +171,40 @@ python3 main.py --component-info
 
 Applet-specific dependencies belong to the individual applets rather than to the Hub.
 
+## Installing on Fedora
+
+LinSpectacles packages are published through COPR. Enable the repository:
+
+```bash
+sudo dnf copr enable brunonlinespace/linspectacles
+```
+
+Install only the Hub:
+
+```bash
+sudo dnf install linspectacles-hub
+```
+
+Install the Hub with the recommended official Hub Modules:
+
+```bash
+sudo dnf install linspectacles
+```
+
+Install the complete official applet collection without the Hub:
+
+```bash
+sudo dnf install linspectacles-applets
+```
+
+Install the complete LinSpectacles suite — Hub, official Hub Modules and all official applets:
+
+```bash
+sudo dnf install linspectacles-full
+```
+
+The dependency-only metapackages are maintained in **[LinSpectacles Metapackages](https://github.com/linspectacles/linspectacles-metapackages)**. Individual Hub, module and applet RPMs remain independently installable.
+
 ## Fedora RPM build
 
 The Hub repository carries its RPM packaging under:
@@ -183,7 +217,7 @@ On Fedora, the included build script creates the RPM/SRPM artifacts used for COP
 
 ## Current release
 
-**0.2.2** corrects Hub window-title ownership: the desktop application identity remains **LinSpectacles Hub**, while the active Hub window title now reports only its current context, allowing the desktop shell to present **Dashboard — LinSpectacles Hub** or **Applet Name — LinSpectacles Hub** without duplicating the application name. Configuration follows the same context-only title rule.
+**0.2.3** corrects Hub window-title ownership: the desktop application identity remains **LinSpectacles Hub**, while the active Hub window title now reports only its current context, allowing the desktop shell to present **Dashboard — LinSpectacles Hub** or **Applet Name — LinSpectacles Hub** without duplicating the application name. Configuration follows the same context-only title rule.
 
 ## Configuration storage
 
@@ -243,6 +277,7 @@ Copyright © 2026 **brunonlinespace**.
 
 - LinSpectacles Hub: <https://github.com/linspectacles/linspectacles-hub>
 - LinSpectacles Modules: <https://github.com/linspectacles/linspectacles-modules>
+- LinSpectacles Metapackages: <https://github.com/linspectacles/linspectacles-metapackages>
 - Issues: <https://github.com/linspectacles/linspectacles-hub/issues>
 - LinSpectacles organization: <https://github.com/linspectacles/>
 - brunonlinespace: <https://github.com/brunonlinespace/>

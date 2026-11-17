@@ -332,7 +332,7 @@ class ModulesConfigurationHost:
         if not self._ensure_manual_location_confirmed():
             return
         filename, _ = QFileDialog.getOpenFileName(
-            self,
+            None,
             "Add LinSpectacles Module",
             "",
             "LinSpectacles Module (*.zip);;ZIP Archives (*.zip)",

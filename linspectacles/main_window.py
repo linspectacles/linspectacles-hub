@@ -105,7 +105,7 @@ class Linspectacles(NavigationHost, DashboardHost, ModuleHost, AppletHost, QMain
 
         app = QApplication.instance()
         if app is not None:
-            app.setStyleSheet(DARK_STYLESHEET)
+            self.setStyleSheet(DARK_STYLESHEET)
 
         self.setup_menu()
         self.setup_sidebar()

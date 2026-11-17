@@ -9,4 +9,4 @@ PUBLISHER = "brunonlinespace"
 ORGANIZATION_URL = "https://github.com/linspectacles/"
 REPOSITORY = "https://github.com/linspectacles/linspectacles-hub"
 
-VERSION = "0.2.2"
+VERSION = "0.2.3"

@@ -4,7 +4,7 @@
 
 > Repository front page: [`../README.md`](../README.md)
 
-**Version 0.2.2** · Organisation ID: **linspectacles** · Publisher/editor: **brunonlinespace** · GPLv3-or-later
+**Version 0.2.3** · Organisation ID: **linspectacles** · Publisher/editor: **brunonlinespace** · GPLv3-or-later
 
 **Expose. Explore. Explain.**
 

@@ -40,7 +40,7 @@ The script does not use `sudo` or install dependencies. It expects Fedora RPM
 build and desktop/AppStream validation tools to already be installed. Finished
 RPM/SRPM files are copied to `dist-rpm/`.
 
-The application identifies itself as `0.2.2`; the RPM package is **`linspectacles-hub`** with `Version: 0.2.2`, `Release: 1`.
+The application identifies itself as `0.2.3`; the RPM package is **`linspectacles-hub`** with `Version: 0.2.3`, `Release: 1`.
 
 
 ### 0.2.2 contextual window titles
